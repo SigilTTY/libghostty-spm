@@ -128,6 +128,9 @@
             core.onPostRender = { [weak self] in
                 self?.enforceSublayerScale()
             }
+            core.neutralizeRenderLayers = { [weak self] in
+                self?.neutralizeGhosttyLayers()
+            }
 
             setupApplicationLifecycleObservers()
             syncApplicationActiveState()

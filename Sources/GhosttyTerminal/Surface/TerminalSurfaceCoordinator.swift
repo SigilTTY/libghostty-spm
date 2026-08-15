@@ -46,6 +46,16 @@ final class TerminalSurfaceCoordinator {
     var onMetricsUpdate: (() -> Void)?
     var onCellSizeDidChange: (() -> Void)?
 
+    /// Called right before the surface is freed, on EVERY teardown path
+    /// (window exit, controller/configuration rebuild, deinit). Platform
+    /// views use it to detach and neutralize the renderer's CALayers:
+    /// ghostty's IOSurfaceLayer keeps the renderer pointer in its
+    /// display_cb/display_ctx ivars and never clears them, so a layer
+    /// that survives the free (still in a layer tree, or referenced by an
+    /// in-flight CoreAnimation commit) dangles and any later -display
+    /// walks into the freed renderer.
+    var neutralizeRenderLayers: (() -> Void)?
+
     /// Called after every display-link render (`tick`).
     ///
     /// When `synchronizeMetrics` sends a new pixel size to ghostty via
@@ -319,6 +329,9 @@ final class TerminalSurfaceCoordinator {
         bridge.rawSurface = nil
         let hadSurface = surface != nil
         surface?.setFocus(false)
+        if hadSurface {
+            neutralizeRenderLayers?()
+        }
         surface?.free()
         surface = nil
         lastMetrics = nil
