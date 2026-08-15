@@ -532,6 +532,22 @@
                     "touch scroll changed translation=\(String(format: "%.2f", translation.x))x\(String(format: "%.2f", translation.y))"
                 )
 
+                // Wheel reports are encoded with the surface's last known
+                // mouse position, and ghostty drops non-release mouse events
+                // whose position is outside the viewport (mouse_encode.zig).
+                // Direct touches are the only input path that never moves
+                // that position, so it stays at the embedded apprt's initial
+                // (-1, -1) and every wheel report a mouse-reporting TUI
+                // (tmux, herdr attach, …) should receive is silently
+                // discarded. Pin the position to the finger before each
+                // scroll; the local viewport-scroll path never reads it.
+                let location = gesture.location(in: self)
+                surface?.sendMousePos(
+                    x: location.x,
+                    y: location.y,
+                    mods: ghostty_input_mods_e(rawValue: 0)
+                )
+
                 let scrollMods = TerminalScrollModifiers(precision: true)
                 surface?.sendMouseScroll(
                     x: Double(translation.x * touchScrollMultiplier),
