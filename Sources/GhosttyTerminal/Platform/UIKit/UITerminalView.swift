@@ -43,6 +43,7 @@
             var softwareKeyboardVisible = false
             var pendingKeyboardDismissOnTouchEnd = false
             var touchDidScrollDuringCurrentTouch = false
+            var directTouchClickPending = false
         #endif
 
         #if !targetEnvironment(macCatalyst)

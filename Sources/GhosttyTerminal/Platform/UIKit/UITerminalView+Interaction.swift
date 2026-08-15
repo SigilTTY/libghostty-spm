@@ -23,7 +23,19 @@
             #else
                 pendingKeyboardDismissOnTouchEnd = false
                 touchDidScrollDuringCurrentTouch = false
-                if softwareKeyboardVisible {
+                directTouchClickPending = false
+                if surface?.isMouseCaptured == true {
+                    // A mouse-mode TUI owns the tap: forward it as a click
+                    // on touchesEnded instead of driving the keyboard
+                    // (show/hide stays on the accessory button and the
+                    // host's gestures). A tap that stops momentum scrolling
+                    // is consumed, like a native scroll view's.
+                    let momentumActive = momentumDisplayLink != nil
+                    stopMomentumScrolling()
+                    directTouchClickPending = !momentumActive &&
+                        touches.count == 1 &&
+                        (event?.allTouches?.count ?? 1) == 1
+                } else if softwareKeyboardVisible {
                     pendingKeyboardDismissOnTouchEnd = true
                 } else {
                     becomeFirstResponder()
@@ -53,6 +65,32 @@
                     resignFirstResponder()
                 }
                 pendingKeyboardDismissOnTouchEnd = false
+                if directTouchClickPending, !touchDidScrollDuringCurrentTouch,
+                   let surface, let touch = touches.first {
+                    // Only real taps get here: a pan that claimed the
+                    // sequence ends in touchesCancelled, a long-press
+                    // clears the flag. Position must go first - button
+                    // reports are encoded with the surface's last known
+                    // mouse position.
+                    let location = touch.location(in: self)
+                    let mods = ghostty_input_mods_e(rawValue: 0)
+                    TerminalDebugLog.log(
+                        .input,
+                        "direct tap click location=\(NSCoder.string(for: location))"
+                    )
+                    surface.sendMousePos(x: location.x, y: location.y, mods: mods)
+                    surface.sendMouseButton(
+                        state: GHOSTTY_MOUSE_PRESS,
+                        button: GHOSTTY_MOUSE_LEFT,
+                        mods: mods
+                    )
+                    surface.sendMouseButton(
+                        state: GHOSTTY_MOUSE_RELEASE,
+                        button: GHOSTTY_MOUSE_LEFT,
+                        mods: mods
+                    )
+                }
+                directTouchClickPending = false
                 touchDidScrollDuringCurrentTouch = false
             #endif
             super.touchesEnded(touches, with: event)
@@ -68,6 +106,7 @@
             #if !targetEnvironment(macCatalyst)
                 pendingKeyboardDismissOnTouchEnd = false
                 touchDidScrollDuringCurrentTouch = false
+                directTouchClickPending = false
             #endif
             super.touchesCancelled(touches, with: event)
         }
@@ -452,6 +491,10 @@
                 _ gesture: UILongPressGestureRecognizer
             ) {
                 guard gesture.state == .began else { return }
+                // The finger lift after a long-press still delivers
+                // touchesEnded (cancelsTouchesInView = false) - it must not
+                // double as a click.
+                directTouchClickPending = false
                 guard let delegate = delegate as? any TerminalSurfaceTextSelectionRequestDelegate else { return }
                 guard let surface else { return }
                 guard case let .inMemory(session) = configuration.backend else {
