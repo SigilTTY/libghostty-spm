@@ -76,13 +76,12 @@
             )
 
             if !additionalMods.isEmpty, let ghosttyKey = ghosttyKey(from: delivery) {
-                var event = ghostty_input_key_s()
-                event.action = GHOSTTY_ACTION_PRESS
-                event.keycode = TerminalHardwareKeyRouter.appKitKeyCode(
-                    for: ghosttyKey
+                sendSyntheticGhosttyKey(
+                    ghosttyKey,
+                    usage: usage,
+                    modifiers: additionalMods,
+                    to: surface
                 )
-                event.mods = additionalMods.ghosttyMods
-                _ = surface.sendKeyEvent(event)
                 return
             }
 
@@ -92,12 +91,46 @@
                 session.sendInput(data)
 
             case let .ghostty(ghosttyKey):
-                var event = ghostty_input_key_s()
-                event.action = GHOSTTY_ACTION_PRESS
-                event.keycode = TerminalHardwareKeyRouter.appKitKeyCode(
-                    for: ghosttyKey
+                sendSyntheticGhosttyKey(
+                    ghosttyKey,
+                    usage: usage,
+                    modifiers: additionalMods,
+                    to: surface
                 )
-                event.mods = additionalMods.ghosttyMods
+            }
+        }
+
+        /// Builds the same event shape the hardware path (`pressesBegan`)
+        /// does: the keycode *plus* the codepoint and text a real `UIKey`
+        /// would have carried. Keys with no literal text (arrows, function
+        /// keys) send the keycode alone, exactly as UIKit's own path does
+        /// once `filteredFunctionKeyText` rejects their private-use scalars.
+        private func sendSyntheticGhosttyKey(
+            _ ghosttyKey: ghostty_input_key_e,
+            usage: UInt16,
+            modifiers: TerminalInputModifiers,
+            to surface: TerminalSurface
+        ) {
+            var event = ghostty_input_key_s()
+            event.action = GHOSTTY_ACTION_PRESS
+            event.keycode = TerminalHardwareKeyRouter.appKitKeyCode(
+                for: ghosttyKey
+            )
+            event.mods = modifiers.ghosttyMods
+
+            guard
+                let literal = TerminalHardwareKeyRouter.literalTextForUIKit(
+                    usage: usage
+                ),
+                let scalar = literal.unicodeScalars.first
+            else {
+                _ = surface.sendKeyEvent(event)
+                return
+            }
+
+            event.unshifted_codepoint = scalar.value
+            literal.withCString { ptr in
+                event.text = ptr
                 _ = surface.sendKeyEvent(event)
             }
         }
@@ -105,8 +138,37 @@
         @discardableResult
         func handleStickyTextInput(_ text: String) -> Bool {
             handleStickyTextInput(text) { [weak self] text in
-                self?.inputHandler.insertText(text)
+                guard let self else { return }
+                if sendKeystrokeText(text) { return }
+                inputHandler.insertText(text)
             }
+        }
+
+        /// Sends text that came from a *key* — an accessory-bar symbol, a
+        /// keystroke a sticky modifier turned out not to apply to — as the
+        /// bytes that key produces, and reports whether it did.
+        ///
+        /// The alternative is `inputHandler.insertText`, which ends in
+        /// `surface.sendText`: libghostty routes surface text through its
+        /// paste pipeline, so once the remote turns on bracketed paste
+        /// (mode 2004) the characters arrive wrapped in ESC[200~/ESC[201~.
+        /// A line editor inserts pasted and typed characters alike, but a
+        /// full-screen application reads a bracketed paste as data rather
+        /// than commands — in vim the `/` key opens no search and `:` no
+        /// command line, they just land in the buffer.
+        ///
+        /// Only hosts that own the write side (`.inMemory`) can be served
+        /// this way; `.exec` returns false and keeps the existing path, as
+        /// does anything with an IME commit in flight, whose preedit
+        /// teardown lives in `inputHandler`.
+        private func sendKeystrokeText(_ text: String) -> Bool {
+            guard
+                !inputHandler.hasMarkedText,
+                case let .inMemory(session) = configuration.backend
+            else { return false }
+
+            session.sendInput(Data(text.utf8))
+            return true
         }
 
         @discardableResult

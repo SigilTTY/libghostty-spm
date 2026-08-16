@@ -342,6 +342,19 @@ struct TerminalHardwareKeyRouterTests {
     }
 
     @Test
+    func `literal text for UI kit covers the keys a UIKey would carry`() {
+        // Esc and Tab are the accessory keys with real characters behind
+        // them; without the codepoint they carry, Ghostty cannot build the
+        // modifyOtherKeys form vim enables on xterm-like terminals.
+        #expect(TerminalHardwareKeyRouter.literalTextForUIKit(usage: 0x29) == "\u{1B}")
+        #expect(TerminalHardwareKeyRouter.literalTextForUIKit(usage: 0x2B) == "\t")
+        // Arrows have no literal text (UIKit reports private-use scalars,
+        // which `filteredFunctionKeyText` rejects on the hardware path).
+        #expect(TerminalHardwareKeyRouter.literalTextForUIKit(usage: 0x50) == nil)
+        #expect(TerminalHardwareKeyRouter.literalTextForUIKit(usage: 0x52) == nil)
+    }
+
+    @Test
     func `app kit direct input requires no modifiers`() {
         #expect(
             TerminalKeyEventHandler.shouldUseDirectInput(

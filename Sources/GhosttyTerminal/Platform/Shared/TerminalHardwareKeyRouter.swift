@@ -59,6 +59,26 @@ enum TerminalHardwareKeyRouter {
         return .ghostty(ghosttyKeyForAppKit(keyCode: keyCode))
     }
 
+    /// The text a real hardware key of this HID usage delivers through
+    /// `UIKey.characters` / `charactersIgnoringModifiers`.
+    ///
+    /// Synthetic accessory-bar keys have no `UIKey` to read this from, but
+    /// Ghostty needs it: once an application turns on `modifyOtherKeys`
+    /// (vim does, for every `xterm*` terminal type) the key is encoded as
+    /// `CSI 27;mods;codepoint~`, and an event carrying only a keycode has no
+    /// codepoint to put there. Plain Esc looked fine until then because the
+    /// legacy encoding needs nothing but the key itself.
+    static func literalTextForUIKit(usage: UInt16) -> String? {
+        switch usage {
+        case 0x29:
+            "\u{1B}"
+        case 0x2B:
+            "\t"
+        default:
+            nil
+        }
+    }
+
     private static func directControlInputForUIKit(usage: UInt16) -> Data? {
         switch usage {
         case 0x2A:
