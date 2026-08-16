@@ -8,6 +8,7 @@
 #if canImport(UIKit)
     import GhosttyKit
     import UIKit
+    import UniformTypeIdentifiers
 
     extension UITerminalView {
         override open func touchesBegan(
@@ -294,6 +295,32 @@
             guard copySelectedTextToPasteboard() else { return }
         }
 
+        /// A Finder/Files file copy carries the file's display name as
+        /// its string representation — text in form only, so file URLs
+        /// outrank the string; otherwise textlessness decides. Metadata
+        /// probes only (never raises the paste-permission banner).
+        static func pasteboardPrefersNonTextPaste(_ pasteboard: UIPasteboard) -> Bool {
+            if pasteboard.contains(pasteboardTypes: [UTType.fileURL.identifier]) {
+                return true
+            }
+            return !pasteboard.hasStrings
+        }
+
+        #if !targetEnvironment(macCatalyst)
+            /// The responder-chain paste action: the system keyboard's
+            /// paste suggestion chip ("Paste from Photos"), third-party
+            /// IME paste buttons and the edit menu all land here. Same
+            /// pipeline as the accessory-bar Paste key — text keeps
+            /// ghostty paste semantics, a textless pasteboard goes to
+            /// the non-text-paste delegate. A user gesture by
+            /// construction, so the delegate seam's gesture-only
+            /// contract holds. (Catalyst keeps the accessory-less
+            /// status quo — handleInputBarKey doesn't exist there.)
+            @IBAction override open func paste(_: Any?) {
+                handleInputBarKey(.paste)
+            }
+        #endif
+
         override open func canPerformAction(
             _ action: Selector,
             withSender sender: Any?
@@ -301,6 +328,15 @@
             if action == #selector(copy(_:)) {
                 return surface?.hasSelection() == true
             }
+            #if !targetEnvironment(macCatalyst)
+                if action == #selector(paste(_:)) {
+                    // hasStrings/hasImages are metadata probes — unlike
+                    // reading .string/.image they never raise the system
+                    // paste-permission banner.
+                    let pasteboard = UIPasteboard.general
+                    return pasteboard.hasStrings || pasteboard.hasImages
+                }
+            #endif
             return super.canPerformAction(action, withSender: sender)
         }
 

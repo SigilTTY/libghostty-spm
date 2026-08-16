@@ -21,7 +21,11 @@
 
             case .paste:
                 _ = stickyModifiers.consumeForNextKey()
-                if let text = UIPasteboard.general.string, !text.isEmpty {
+                let pasteboard = UIPasteboard.general
+                let handledByHost = Self.pasteboardPrefersNonTextPaste(pasteboard)
+                    && (delegate as? any TerminalSurfaceNonTextPasteDelegate)?
+                        .terminalDidRequestNonTextPaste() == true
+                if !handledByHost, let text = pasteboard.string, !text.isEmpty {
                     inputHandler.insertText(text)
                 }
 

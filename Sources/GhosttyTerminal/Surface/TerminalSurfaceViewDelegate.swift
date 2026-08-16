@@ -137,6 +137,29 @@ public protocol TerminalSurfaceTextSelectionRequestDelegate: TerminalSurfaceView
     func terminalDidRequestTextSelection(_ request: TerminalTextSelectionRequest)
 }
 
+/// A user paste gesture (accessory-bar Paste, ⌘V, the responder-chain
+/// paste action) found a pasteboard whose primary payload is not
+/// prompt-ready text: either no text at all (image content copies), or
+/// file URLs whose string representation is mere decoration (a Finder /
+/// Files file copy carries the file's *name* as its string — pasting
+/// that into a terminal serves nobody). The host decides what, if
+/// anything, to do with the payload; the library never inspects
+/// non-text pasteboard content itself.
+///
+/// Return `true` if the paste was taken over. Returning `false` falls
+/// back to the legacy behavior — the string pastes if there is one,
+/// otherwise the gesture stays a silent no-op.
+///
+/// Deliberately wired to user gestures ONLY — never to the runtime's
+/// clipboard-read callback, which a remote application can drive via
+/// OSC 52. Routing it there would let the remote trigger whatever the
+/// host does with the pasteboard (e.g. upload an image) without any
+/// user action.
+@MainActor
+public protocol TerminalSurfaceNonTextPasteDelegate: TerminalSurfaceViewDelegate {
+    func terminalDidRequestNonTextPaste() -> Bool
+}
+
 /// Notifies a delegate when the underlying ``TerminalSurface`` is created or
 /// torn down. Useful when a consumer needs surface-level APIs (e.g.
 /// ``TerminalSurface/sendText(_:)``) reachable from outside the platform view.

@@ -28,6 +28,10 @@
         #endif
         lazy var selectionContextMenuInteraction = UIContextMenuInteraction(delegate: self)
         var hardwareKeyHandled = false
+        /// A ⌘V press went to the non-text-paste delegate instead of
+        /// ghostty; the matching release must be swallowed too, or the
+        /// surface would see a release for a key it never saw pressed.
+        var nonTextPasteChordActive = false
         let touchScrollMultiplier: CGFloat = 3.0
         #if !targetEnvironment(macCatalyst)
             var currentFontSize: Float = 14

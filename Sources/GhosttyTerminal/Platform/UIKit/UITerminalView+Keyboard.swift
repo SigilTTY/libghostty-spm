@@ -16,6 +16,20 @@
         ) {
             for press in presses {
                 guard let key = press.key else { continue }
+                // Plain ⌘V over a pasteboard whose payload isn't
+                // prompt-ready text: the same gesture-only seam as the
+                // accessory-bar Paste — see
+                // TerminalSurfaceNonTextPasteDelegate. Unhandled falls
+                // through to ghostty's binding path (legacy behavior);
+                // when handled, the matching release is swallowed in
+                // pressesEnded.
+                if Self.isPlainPasteChord(key),
+                   Self.pasteboardPrefersNonTextPaste(UIPasteboard.general),
+                   (delegate as? any TerminalSurfaceNonTextPasteDelegate)?
+                       .terminalDidRequestNonTextPaste() == true {
+                    nonTextPasteChordActive = true
+                    continue
+                }
                 handleKeyPress(key, action: GHOSTTY_ACTION_PRESS)
             }
         }
@@ -26,6 +40,10 @@
         ) {
             for press in presses {
                 guard let key = press.key else { continue }
+                if nonTextPasteChordActive, Self.isPlainPasteChord(key) {
+                    nonTextPasteChordActive = false
+                    continue
+                }
                 handleKeyPress(key, action: GHOSTTY_ACTION_RELEASE)
             }
             hardwareKeyHandled = false
@@ -36,7 +54,18 @@
             with event: UIPressesEvent?
         ) {
             hardwareKeyHandled = false
+            nonTextPasteChordActive = false
             super.pressesCancelled(presses, with: event)
+        }
+
+        /// ⌘V with no other modifiers — the one chord treated as a paste
+        /// gesture (mirrors the AppKit check).
+        private static func isPlainPasteChord(_ key: UIKey) -> Bool {
+            guard key.keyCode == .keyboardV else { return false }
+            let mods = key.modifierFlags.intersection(
+                [.command, .shift, .alternate, .control]
+            )
+            return mods == .command
         }
 
         func handleKeyPress(

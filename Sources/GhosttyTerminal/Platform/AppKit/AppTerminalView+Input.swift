@@ -19,6 +19,20 @@
             guard window?.firstResponder === self else { return false }
             guard let surface else { return false }
 
+            // Plain ⌘V over a pasteboard whose payload isn't prompt-ready
+            // text (no string at all, or a file copy whose string is just
+            // the file's name): hand it to the host (it may serve an
+            // image or other payload). Unhandled falls through to the
+            // binding path — legacy behavior. Only these gesture entry
+            // points may reach the delegate — see
+            // TerminalSurfaceNonTextPasteDelegate.
+            if Self.isPlainPasteChord(event),
+               Self.pasteboardPrefersNonTextPaste(NSPasteboard.general),
+               (delegate as? any TerminalSurfaceNonTextPasteDelegate)?
+                   .terminalDidRequestNonTextPaste() == true {
+                return true
+            }
+
             if keyIsBinding(event, on: surface) {
                 keyDown(with: event)
                 return true
@@ -110,13 +124,37 @@
         }
 
         @IBAction func paste(_: Any?) {
-            if let text = NSPasteboard.general.string(forType: .string) {
+            let pasteboard = NSPasteboard.general
+            if Self.pasteboardPrefersNonTextPaste(pasteboard),
+               (delegate as? any TerminalSurfaceNonTextPasteDelegate)?
+                   .terminalDidRequestNonTextPaste() == true {
+                return
+            }
+            if let text = pasteboard.string(forType: .string), !text.isEmpty {
                 TerminalDebugLog.log(
                     .input,
                     "paste binding bytes=\(text.utf8.count) lines=\(TerminalInputText.lineCount(in: text))"
                 )
             }
             _ = surface?.performBindingAction("paste_from_clipboard")
+        }
+
+        /// ⌘V with no other modifiers — the one chord treated as a paste
+        /// gesture. A rebound paste key falls back to the binding path,
+        /// where a textless pasteboard stays today's silent no-op.
+        private static func isPlainPasteChord(_ event: NSEvent) -> Bool {
+            guard event.charactersIgnoringModifiers == "v" else { return false }
+            let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            return mods.contains(.command)
+                && mods.isDisjoint(with: [.shift, .option, .control])
+        }
+
+        /// A Finder file copy carries the file's display name as its
+        /// string representation — text in form only, so file URLs
+        /// outrank the string; otherwise textlessness decides.
+        static func pasteboardPrefersNonTextPaste(_ pasteboard: NSPasteboard) -> Bool {
+            if pasteboard.types?.contains(.fileURL) == true { return true }
+            return pasteboard.string(forType: .string)?.isEmpty ?? true
         }
 
         @IBAction override open func selectAll(_: Any?) {
