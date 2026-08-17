@@ -42,6 +42,69 @@ public protocol TerminalSurfaceCloseDelegate: TerminalSurfaceViewDelegate {
     func terminalDidClose(processAlive: Bool)
 }
 
+/// The operation that caused Ghostty to request a clipboard decision.
+public enum TerminalClipboardRequestKind: Sendable {
+    case paste
+    case osc52Read
+    case osc52Write
+
+    init?(_ rawValue: ghostty_clipboard_request_e) {
+        switch rawValue {
+        case GHOSTTY_CLIPBOARD_REQUEST_PASTE:
+            self = .paste
+        case GHOSTTY_CLIPBOARD_REQUEST_OSC_52_READ:
+            self = .osc52Read
+        case GHOSTTY_CLIPBOARD_REQUEST_OSC_52_WRITE:
+            self = .osc52Write
+        default:
+            return nil
+        }
+    }
+}
+
+/// A one-shot host decision for an unsafe or otherwise protected clipboard
+/// request. Hosts must call ``respond(allow:)`` exactly once. Dropping an
+/// unanswered request cancels it.
+@MainActor
+public final class TerminalClipboardConfirmationRequest {
+    public let contents: String
+    public let kind: TerminalClipboardRequestKind
+
+    private var completion: ((Bool) -> Void)?
+
+    init(
+        contents: String,
+        kind: TerminalClipboardRequestKind,
+        completion: @escaping (Bool) -> Void
+    ) {
+        self.contents = contents
+        self.kind = kind
+        self.completion = completion
+    }
+
+    public func respond(allow: Bool) {
+        guard let completion else { return }
+        self.completion = nil
+        completion(allow)
+    }
+
+    deinit {
+        MainActor.assumeIsolated {
+            completion?(false)
+        }
+    }
+}
+
+/// Lets an embedding host own confirmation UI for unsafe paste and protected
+/// OSC 52 operations. If the delegate does not implement this protocol, the
+/// request is denied.
+@MainActor
+public protocol TerminalSurfaceClipboardConfirmationDelegate: TerminalSurfaceViewDelegate {
+    func terminalDidRequestClipboardConfirmation(
+        _ request: TerminalClipboardConfirmationRequest
+    )
+}
+
 // MARK: - Extended action delegates
 
 /// State of an OSC 9;4 / DECSET progress report.
@@ -115,6 +178,27 @@ public protocol TerminalSurfaceHoverLinkDelegate: TerminalSurfaceViewDelegate {
 @MainActor
 public protocol TerminalSurfacePwdDelegate: TerminalSurfaceViewDelegate {
     func terminalDidChangeWorkingDirectory(_ path: String)
+}
+
+/// Scrollbar geometry reported by the terminal, in rows: `offset` rows are
+/// scrolled off above the viewport, `len` rows are visible, out of `total`
+/// rows of content (scrollback + screen).
+public struct TerminalScrollbar: Equatable, Sendable {
+    public let total: UInt64
+    public let offset: UInt64
+    public let len: UInt64
+
+    public init(total: UInt64, offset: UInt64, len: UInt64) {
+        self.total = total
+        self.offset = offset
+        self.len = len
+    }
+}
+
+/// The scrollbar geometry changed (the viewport scrolled or the content grew).
+@MainActor
+public protocol TerminalSurfaceScrollbarDelegate: TerminalSurfaceViewDelegate {
+    func terminalDidUpdateScrollbar(_ scrollbar: TerminalScrollbar)
 }
 
 /// User long-pressed to request a selection-page presentation.

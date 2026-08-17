@@ -44,6 +44,7 @@ fi
 python3 - "$XCFRAMEWORK_PATH" <<'PY'
 import os
 import plistlib
+import subprocess
 import sys
 
 xcframework = sys.argv[1]
@@ -70,6 +71,8 @@ for library in libraries:
     binary_path = library.get("BinaryPath")
     headers_path = library.get("HeadersPath")
     platform = library.get("SupportedPlatform")
+    platform_variant = library.get("SupportedPlatformVariant")
+    declared_architectures = set(library.get("SupportedArchitectures", []))
 
     if not identifier:
         raise SystemExit("[!] library entry missing LibraryIdentifier")
@@ -83,12 +86,33 @@ for library in libraries:
     variant_dir = os.path.join(xcframework, identifier)
     archive_path = os.path.join(variant_dir, library_path)
     headers_dir = os.path.join(variant_dir, headers_path)
-    header_path = os.path.join(headers_dir, "ghostty.h")
-    modulemap_path = os.path.join(headers_dir, "module.modulemap")
+    header_path = os.path.join(headers_dir, "libghostty", "ghostty.h")
+    modulemap_path = os.path.join(headers_dir, "libghostty", "module.modulemap")
 
     for required_path in (archive_path, header_path, modulemap_path):
         if not os.path.exists(required_path):
             raise SystemExit(f"[!] {identifier} missing required file: {required_path}")
+
+    actual_architectures = set(
+        subprocess.check_output(["lipo", "-archs", archive_path], text=True).split()
+    )
+    if actual_architectures != declared_architectures:
+        raise SystemExit(
+            f"[!] {identifier} architecture metadata mismatch: "
+            f"plist={sorted(declared_architectures)} archive={sorted(actual_architectures)}"
+        )
+
+    expected_architectures = {
+        ("macos", None): {"arm64", "x86_64"},
+        ("ios", None): {"arm64"},
+        ("ios", "maccatalyst"): {"arm64", "x86_64"},
+        ("ios", "simulator"): {"arm64", "x86_64"},
+    }.get((platform, platform_variant))
+    if expected_architectures is not None and actual_architectures != expected_architectures:
+        raise SystemExit(
+            f"[!] {identifier} architectures must be {sorted(expected_architectures)}, "
+            f"got {sorted(actual_architectures)}"
+        )
 
     with open(modulemap_path, "r", encoding="utf-8") as handle:
         modulemap = handle.read()
@@ -97,5 +121,5 @@ for library in libraries:
     if "module libghostty" not in modulemap:
         raise SystemExit(f"[!] {identifier} module map does not declare module libghostty")
 
-print(f"[*] verified static-library xcframework layout: {xcframework}")
+print(f"[*] verified static-library xcframework layout and architectures: {xcframework}")
 PY

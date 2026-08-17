@@ -142,6 +142,21 @@ final class TerminalCallbackBridge {
                     .terminalDidChangeWorkingDirectory(pwd)
             }
 
+        case GHOSTTY_ACTION_SCROLLBAR:
+            let payload = action.action.scrollbar
+            TerminalDebugLog.log(
+                .actions,
+                "callback action=scrollbar total=\(payload.total) offset=\(payload.offset) len=\(payload.len)"
+            )
+            (delegate as? any TerminalSurfaceScrollbarDelegate)?
+                .terminalDidUpdateScrollbar(
+                    TerminalScrollbar(
+                        total: payload.total,
+                        offset: payload.offset,
+                        len: payload.len
+                    )
+                )
+
         default:
             TerminalDebugLog.log(
                 .actions,
@@ -157,5 +172,23 @@ final class TerminalCallbackBridge {
         )
         (delegate as? any TerminalSurfaceCloseDelegate)?
             .terminalDidClose(processAlive: processAlive)
+    }
+
+    func handleClipboardConfirmation(
+        contents: String,
+        kind: TerminalClipboardRequestKind,
+        completion: @escaping (Bool) -> Void
+    ) {
+        guard let delegate = delegate as? any TerminalSurfaceClipboardConfirmationDelegate else {
+            completion(false)
+            return
+        }
+        delegate.terminalDidRequestClipboardConfirmation(
+            TerminalClipboardConfirmationRequest(
+                contents: contents,
+                kind: kind,
+                completion: completion
+            )
+        )
     }
 }
