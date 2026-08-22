@@ -56,18 +56,10 @@ private enum TerminalCallbacks {
         }
     }
 
-    static func writeClipboard(
-        userdata _: UnsafeMutableRawPointer?,
-        clipboard _: ghostty_clipboard_e,
-        contents: UnsafePointer<ghostty_clipboard_content_s>?,
-        contentsLen: Int,
-        confirm _: Bool
-    ) {
-        guard contentsLen > 0 else { return }
-        guard let content = contents?.pointee else { return }
-        guard let data = content.data else { return }
-        let string = String(cString: data)
-
+    /// Writes `string` to the system pasteboard. Main-actor isolated: AppKit
+    /// and UIKit pasteboards are not safe to touch from the callback thread.
+    @MainActor
+    private static func setPasteboard(_ string: String) {
         #if canImport(UIKit)
             UIPasteboard.general.string = string
         #elseif canImport(AppKit)
@@ -75,6 +67,50 @@ private enum TerminalCallbacks {
             pasteboard.clearContents()
             pasteboard.setString(string, forType: .string)
         #endif
+    }
+
+    static func writeClipboard(
+        userdata: UnsafeMutableRawPointer?,
+        clipboard _: ghostty_clipboard_e,
+        contents: UnsafePointer<ghostty_clipboard_content_s>?,
+        contentsLen: Int,
+        confirm: Bool
+    ) {
+        guard contentsLen > 0 else { return }
+        guard let content = contents?.pointee else { return }
+        guard let data = content.data else { return }
+        let string = String(cString: data)
+
+        TerminalDebugLog.log(
+            .input,
+            "clipboard write bytes=\(string.utf8.count) confirm=\(confirm)"
+        )
+
+        // `confirm` is the core asking the host to gate this write — it is set
+        // when `clipboard-write = ask` and the write came from OSC 52. Unlike
+        // the read side there is no `complete_clipboard_request` round trip:
+        // the host either performs the write or drops it.
+        guard confirm, let userdata else {
+            terminalRunOnMain { setPasteboard(string) }
+            return
+        }
+
+        let bridge = Unmanaged<TerminalCallbackBridge>
+            .fromOpaque(userdata)
+            .takeUnretainedValue()
+        terminalRunOnMain {
+            bridge.handleClipboardConfirmation(
+                contents: string,
+                kind: .osc52Write
+            ) { allowed in
+                guard allowed else {
+                    TerminalDebugLog.log(.input, "clipboard write denied")
+                    return
+                }
+                setPasteboard(string)
+                TerminalDebugLog.log(.input, "clipboard write allowed")
+            }
+        }
     }
 
     static func readClipboard(
