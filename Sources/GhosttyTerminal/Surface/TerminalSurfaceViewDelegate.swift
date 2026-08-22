@@ -42,6 +42,36 @@ public protocol TerminalSurfaceCloseDelegate: TerminalSurfaceViewDelegate {
     func terminalDidClose(processAlive: Bool)
 }
 
+/// Scrollback search (ghostty 1.3+). The core owns the search itself — the
+/// host owns the UI. `startSearch`/`endSearch` are requests from the core to
+/// show or hide that UI (⌘F or ⌘E with ghostty's own bindings still in place,
+/// or a `start_search` / `search_selection` binding action); the two counters
+/// report progress of the search thread.
+///
+/// Sentinels and ordering, as observed against the 1.3.1 engine:
+///  * `-1` on either counter means "no active search".
+///  * A genuine zero-match search reports `total == 0`, so 0 and -1 are
+///    distinct — but each new `search:` first emits a transient
+///    `total = 0` / `selected = -1` reset before the real total lands. A
+///    search-as-you-type UI must debounce, or it will flash "no results"
+///    on every keystroke.
+///  * `terminalDidUpdateSearchSelection` never fires for a plain `search:`.
+///    The first selected index arrives only after a `navigate_search`.
+@MainActor
+public protocol TerminalSurfaceSearchDelegate: TerminalSurfaceViewDelegate {
+    /// The core asks the host to show its find UI. `needle` is empty when the
+    /// request carries no prefilled term.
+    func terminalDidRequestSearchUI(needle: String)
+    /// The core asks the host to hide its find UI. Also fires when the user
+    /// presses Escape with the terminal focused and a search active — the
+    /// binding is conditional, so Escape still reaches the pty otherwise.
+    func terminalDidEndSearch()
+    /// Total number of matches, or -1 when no search is active.
+    func terminalDidUpdateSearchTotal(_ total: Int)
+    /// Index of the currently selected match, or -1 when none.
+    func terminalDidUpdateSearchSelection(_ selected: Int)
+}
+
 // MARK: - Extended action delegates
 
 /// State of an OSC 9;4 / DECSET progress report.

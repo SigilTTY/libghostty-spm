@@ -142,6 +142,32 @@ final class TerminalCallbackBridge {
                     .terminalDidChangeWorkingDirectory(pwd)
             }
 
+        case GHOSTTY_ACTION_START_SEARCH:
+            let needle = action.action.start_search.needle.map { String(cString: $0) } ?? ""
+            TerminalDebugLog.log(
+                .actions,
+                "callback action=start_search needle=\(TerminalDebugLog.describe(needle))"
+            )
+            (delegate as? any TerminalSurfaceSearchDelegate)?
+                .terminalDidRequestSearchUI(needle: needle)
+
+        case GHOSTTY_ACTION_END_SEARCH:
+            TerminalDebugLog.log(.actions, "callback action=end_search")
+            (delegate as? any TerminalSurfaceSearchDelegate)?
+                .terminalDidEndSearch()
+
+        case GHOSTTY_ACTION_SEARCH_TOTAL:
+            let total = Int(action.action.search_total.total)
+            TerminalDebugLog.log(.actions, "callback action=search_total total=\(total)")
+            (delegate as? any TerminalSurfaceSearchDelegate)?
+                .terminalDidUpdateSearchTotal(total)
+
+        case GHOSTTY_ACTION_SEARCH_SELECTED:
+            let selected = Int(action.action.search_selected.selected)
+            TerminalDebugLog.log(.actions, "callback action=search_selected selected=\(selected)")
+            (delegate as? any TerminalSurfaceSearchDelegate)?
+                .terminalDidUpdateSearchSelection(selected)
+
         default:
             TerminalDebugLog.log(
                 .actions,
