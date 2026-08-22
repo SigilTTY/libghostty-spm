@@ -70,14 +70,18 @@ EOF
 
 test_build() {
     local destination="$1"
+    local command=(
+        xcodebuild
+        -scheme Consumer
+        -destination "$destination"
+        -derivedDataPath "$WORK_DIR/DerivedData"
+        -packageCachePath "$WORK_DIR/PackageCache"
+    )
+
+    command+=(build)
 
     echo "[*] consumer build destination=$destination"
-    xcodebuild \
-        -scheme Consumer \
-        -destination "$destination" \
-        -derivedDataPath "$WORK_DIR/DerivedData" \
-        -packageCachePath "$WORK_DIR/PackageCache" \
-        build 2>&1 | format_output
+    "${command[@]}" 2>&1 | format_output
     local exit_code=${PIPESTATUS[0]}
     if [ "$exit_code" -ne 0 ]; then
         echo "[!] consumer build failed destination=$destination"
