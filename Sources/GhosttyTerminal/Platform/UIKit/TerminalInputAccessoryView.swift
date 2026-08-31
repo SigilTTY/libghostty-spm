@@ -75,7 +75,31 @@
             }
         }
 
+        /// Host-driven rebuild (`inputAccessoryItems` didSet): any pushed
+        /// layer is stale against the new item set, so the stack resets.
         func rebuildContent() {
+            pushedLayers.removeAll()
+            rebuildEffectiveContent()
+        }
+
+        // MARK: - Layers
+
+        /// Sub-layers pushed by `.layer` items; the visible content is the
+        /// top of the stack, or the host's items at the root.
+        private var pushedLayers: [[TerminalInputAccessoryItem]] = []
+
+        private func pushLayer(_ items: [TerminalInputAccessoryItem]) {
+            pushedLayers.append(items)
+            rebuildEffectiveContent()
+        }
+
+        private func popLayer() {
+            guard !pushedLayers.isEmpty else { return }
+            pushedLayers.removeLast()
+            rebuildEffectiveContent()
+        }
+
+        private func rebuildEffectiveContent() {
             stackView.arrangedSubviews.forEach { view in
                 stackView.removeArrangedSubview(view)
                 view.removeFromSuperview()
@@ -83,9 +107,28 @@
             keyButtons.removeAll()
             modifierButtons.removeAll()
 
-            let items = terminalView?.inputAccessoryItems ?? TerminalInputAccessoryItem.defaultItems
-            addArrangedViews(items.map(makeView(for:)))
+            var views: [UIView] = []
+            if !pushedLayers.isEmpty {
+                views.append(makeTrackedBackButton())
+                views.append(makeDivider())
+            }
+            let items = pushedLayers.last
+                ?? terminalView?.inputAccessoryItems
+                ?? TerminalInputAccessoryItem.defaultItems
+            views.append(contentsOf: items.map(makeView(for:)))
+            addArrangedViews(views)
             refreshContent()
+            // Each layer reads from its leading edge, wherever the
+            // previous one was scrolled to.
+            scrollView.contentOffset = .zero
+        }
+
+        private func makeTrackedBackButton() -> AccessoryButton {
+            let button = makeActionButton(title: "Back", systemImage: "chevron.backward") { [weak self] in
+                self?.popLayer()
+            }
+            keyButtons.append(button)
+            return button
         }
 
         private func setupViews() {
@@ -194,9 +237,46 @@
             case .paste:
                 makeTrackedKeyButton(title: "Paste", systemImage: "doc.on.clipboard", key: .paste)
 
+            case let .custom(id, title, systemImage):
+                makeTrackedCustomButton(id: id, title: title, systemImage: systemImage)
+
+            case let .layer(title, systemImage, items):
+                makeTrackedLayerButton(title: title, systemImage: systemImage, items: items)
+
             case .divider:
                 makeDivider()
             }
+        }
+
+        private func makeTrackedLayerButton(
+            title: String,
+            systemImage: String?,
+            items: [TerminalInputAccessoryItem]
+        ) -> AccessoryButton {
+            let button = makeActionButton(title: title, systemImage: systemImage) { [weak self] in
+                self?.pushLayer(items)
+            }
+            keyButtons.append(button)
+            return button
+        }
+
+        private func makeTrackedCustomButton(
+            id: String,
+            title: String,
+            systemImage: String?
+        ) -> AccessoryButton {
+            let button = makeActionButton(title: title, systemImage: systemImage) { [weak terminalView] in
+                terminalView?.onCustomAccessoryItem?(id)
+            }
+            // A host-provided menu wins over tap dispatch: single tap
+            // presents it (showsMenuAsPrimaryAction suppresses the
+            // touchUpInside handler above).
+            if let menu = terminalView?.onCustomAccessoryItemMenu?(id) {
+                button.menu = menu
+                button.showsMenuAsPrimaryAction = true
+            }
+            keyButtons.append(button)
+            return button
         }
 
         private func makeTrackedModifierButton(
@@ -241,13 +321,23 @@
             systemImage: String? = nil,
             key: TerminalInputBarKey
         ) -> AccessoryButton {
-            let button = AccessoryButton(size: buttonSize) { [weak terminalView] in
+            makeActionButton(title: title, systemImage: systemImage) { [weak terminalView] in
                 terminalView?.handleInputBarKey(key)
             }
+        }
+
+        private func makeActionButton(
+            title: String,
+            systemImage: String?,
+            handler: @escaping () -> Void
+        ) -> AccessoryButton {
+            let button = AccessoryButton(size: buttonSize, handler: handler)
             button.accessibilityLabel = title
 
-            if let systemImage {
-                button.setImage(UIImage(systemName: systemImage), for: .normal)
+            // An unresolvable symbol name (newer than the OS) degrades to
+            // the text rendering rather than an empty button.
+            if let systemImage, let image = UIImage(systemName: systemImage) {
+                button.setImage(image, for: .normal)
             } else {
                 var configuration = UIButton.Configuration.plain()
                 configuration.baseForegroundColor = .label

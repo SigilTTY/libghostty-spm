@@ -61,6 +61,20 @@
                     reloadInputViews()
                 }
             }
+
+            /// Dispatch seam for `.custom(id:title:systemImage:)` accessory
+            /// items: invoked with the tapped item's `id`. The bar renders
+            /// custom items with the built-in button chrome but attaches no
+            /// behavior — what a tap means belongs to the host. Not called
+            /// for items whose `onCustomAccessoryItemMenu` returned a menu.
+            open var onCustomAccessoryItem: ((String) -> Void)?
+
+            /// Optional menu seam for `.custom` items: queried per item when
+            /// the bar is (re)built — a non-nil menu becomes the button's
+            /// primary action (single tap presents it, `onCustomAccessoryItem`
+            /// never fires for that item). Set this BEFORE assigning
+            /// `inputAccessoryItems`, or reassign the items to rebuild.
+            open var onCustomAccessoryItemMenu: ((String) -> UIMenu?)?
         #endif
 
         open weak var delegate: (any TerminalSurfaceViewDelegate)? {
