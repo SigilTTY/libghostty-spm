@@ -7,7 +7,7 @@
     import UIKit
 
     @MainActor
-    final class TerminalInputAccessoryView: UIView {
+    final class TerminalInputAccessoryView: UIView, UIScrollViewDelegate {
         weak var terminalView: UITerminalView?
 
         var style: TerminalInputAccessoryStyle = .default {
@@ -26,8 +26,26 @@
         private var blurTrailingConstraint: NSLayoutConstraint?
         private var blurTopConstraint: NSLayoutConstraint?
         private var blurBottomConstraint: NSLayoutConstraint?
+        private let pinnedStackView = UIStackView()
+        /// Edge fades on the scrolling run: the mask goes transparent over
+        /// the last `fadeWidth` points on a side that still has content
+        /// beyond it, so a run wider than the bar reads as scrollable
+        /// instead of simply ending at the divider.
+        private let runFadeMask = CAGradientLayer()
+        private let fadeWidth: CGFloat = 56
+        private var pinnedDivider: UIView?
         private var keyButtons: [AccessoryButton] = []
         private var modifierButtons: [(TerminalStickyModifierState.Modifier, AccessoryButton)] = []
+        /// Buttons of the pinned trailing group: tracked apart from
+        /// `keyButtons` because layer pushes rebuild the scrolling run
+        /// (and its tracking) while the pinned group stays.
+        private var pinnedKeyButtons: [AccessoryButton] = []
+        private var pinnedModifierButtons: [(TerminalStickyModifierState.Modifier, AccessoryButton)] = []
+        /// Which arranged list `makeView(for:)` is currently tracking into.
+        private var buildingPinned = false
+        /// (run → divider, run → bar edge): the first is active only while
+        /// the pinned group has content.
+        private var pinnedTrailingConstraints: (NSLayoutConstraint, NSLayoutConstraint)?
 
         init(terminalView: UITerminalView) {
             self.terminalView = terminalView
@@ -59,14 +77,16 @@
 
         func refreshContent() {
             let hasMarkedText = terminalView?.inputHandler.hasMarkedText ?? false
+            let shiftActivation = terminalView?.stickyModifiers.shift ?? .inactive
             let ctrlActivation = terminalView?.stickyModifiers.ctrl ?? .inactive
             let altActivation = terminalView?.stickyModifiers.alt ?? .inactive
             let commandActivation = terminalView?.stickyModifiers.command ?? .inactive
 
-            keyButtons.forEach { $0.applyRegularStyle(style) }
+            (keyButtons + pinnedKeyButtons).forEach { $0.applyRegularStyle(style) }
 
-            for (modifier, button) in modifierButtons {
+            for (modifier, button) in modifierButtons + pinnedModifierButtons {
                 let activation = switch modifier {
+                case .shift: shiftActivation
                 case .ctrl: ctrlActivation
                 case .alt: altActivation
                 case .command: commandActivation
@@ -80,6 +100,35 @@
         func rebuildContent() {
             pushedLayers.removeAll()
             rebuildEffectiveContent()
+        }
+
+        /// Host-driven rebuild of the fixed trailing group
+        /// (`pinnedInputAccessoryItems` didSet). Independent of the layer
+        /// stack: a pushed layer swaps the scrolling run only.
+        func rebuildPinnedContent() {
+            pinnedStackView.arrangedSubviews.forEach { view in
+                pinnedStackView.removeArrangedSubview(view)
+                view.removeFromSuperview()
+            }
+            pinnedKeyButtons.removeAll()
+            pinnedModifierButtons.removeAll()
+
+            let items = terminalView?.pinnedInputAccessoryItems ?? []
+            buildingPinned = true
+            let views = items.map(makeView(for:))
+            buildingPinned = false
+            views.forEach { pinnedStackView.addArrangedSubview($0) }
+
+            // The separator between the run and the group exists only
+            // while the group has content; an empty group also gives its
+            // trailing padding back to the run.
+            pinnedDivider?.isHidden = items.isEmpty
+            pinnedStackView.isHidden = items.isEmpty
+            if let (runToDivider, runToEdge) = pinnedTrailingConstraints {
+                runToEdge.isActive = items.isEmpty
+                runToDivider.isActive = !items.isEmpty
+            }
+            refreshContent()
         }
 
         // MARK: - Layers
@@ -127,7 +176,7 @@
             let button = makeActionButton(title: "Back", systemImage: "chevron.backward") { [weak self] in
                 self?.popLayer()
             }
-            keyButtons.append(button)
+            track(button)
             return button
         }
 
@@ -160,11 +209,42 @@
             scrollView.showsVerticalScrollIndicator = false
             scrollView.alwaysBounceHorizontal = true
             scrollView.clipsToBounds = true
+            scrollView.delegate = self
+            runFadeMask.startPoint = CGPoint(x: 0, y: 0.5)
+            runFadeMask.endPoint = CGPoint(x: 1, y: 0.5)
+            scrollView.layer.mask = runFadeMask
             blurView.contentView.addSubview(scrollView)
+
+            // Pinned trailing group: divider + its own stack, laid out
+            // OUTSIDE the scroll view so the run scrolls underneath it.
+            // Both collapse to nothing while the group is empty.
+            let divider = makeDivider()
+            pinnedDivider = divider
+            pinnedStackView.translatesAutoresizingMaskIntoConstraints = false
+            pinnedStackView.axis = .horizontal
+            pinnedStackView.alignment = .center
+            pinnedStackView.spacing = 8
+            blurView.contentView.addSubview(divider)
+            blurView.contentView.addSubview(pinnedStackView)
+
+            NSLayoutConstraint.activate([
+                pinnedStackView.trailingAnchor.constraint(equalTo: blurView.contentView.trailingAnchor, constant: -10),
+                pinnedStackView.centerYAnchor.constraint(equalTo: blurView.contentView.centerYAnchor),
+                divider.centerYAnchor.constraint(equalTo: blurView.contentView.centerYAnchor),
+                divider.trailingAnchor.constraint(equalTo: pinnedStackView.leadingAnchor, constant: -8),
+            ])
+            // Hidden views keep their frame in plain Auto Layout, so the
+            // run's trailing edge is tied to the divider only through a
+            // constraint that is swapped by visibility below.
+            let runToDivider = scrollView.trailingAnchor.constraint(equalTo: divider.leadingAnchor, constant: -2)
+            let runToEdge = scrollView.trailingAnchor.constraint(equalTo: blurView.contentView.trailingAnchor)
+            runToDivider.priority = .required
+            runToEdge.priority = .defaultHigh
+            pinnedTrailingConstraints = (runToDivider, runToEdge)
 
             NSLayoutConstraint.activate([
                 scrollView.leadingAnchor.constraint(equalTo: blurView.contentView.leadingAnchor),
-                scrollView.trailingAnchor.constraint(equalTo: blurView.contentView.trailingAnchor),
+                runToEdge,
                 scrollView.topAnchor.constraint(equalTo: blurView.contentView.topAnchor),
                 scrollView.bottomAnchor.constraint(equalTo: blurView.contentView.bottomAnchor),
             ])
@@ -184,10 +264,51 @@
             ])
 
             rebuildContent()
+            rebuildPinnedContent()
         }
 
         private func addArrangedViews(_ views: [UIView]) {
             views.forEach { stackView.addArrangedSubview($0) }
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            updateRunFade()
+        }
+
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            updateRunFade()
+        }
+
+        /// Recomputes the mask from the run's scroll position. Pure
+        /// geometry, no animation — the mask has to track the finger.
+        private func updateRunFade() {
+            let bounds = scrollView.bounds
+            guard bounds.width > 0 else { return }
+            let overflow = scrollView.contentSize.width - bounds.width
+            let offset = scrollView.contentOffset.x
+            let fadeLeading = overflow > 1 && offset > 1
+            let fadeTrailing = overflow > 1 && offset < overflow - 1
+
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            runFadeMask.frame = bounds
+            // Two stops per side: the fade drops to a quarter halfway in,
+            // so most of the band reads as "cut off" rather than a faint
+            // vignette a glance can miss.
+            let opaque = UIColor.black.cgColor
+            let dim = UIColor.black.withAlphaComponent(0.25).cgColor
+            let clear = UIColor.clear.cgColor
+            let fade = Double(min(fadeWidth / bounds.width, 0.45))
+            runFadeMask.colors = [
+                fadeLeading ? clear : opaque, fadeLeading ? dim : opaque, opaque,
+                opaque, fadeTrailing ? dim : opaque, fadeTrailing ? clear : opaque,
+            ]
+            runFadeMask.locations = [
+                0, NSNumber(value: fade / 2), NSNumber(value: fade),
+                NSNumber(value: 1 - fade), NSNumber(value: 1 - fade / 2), 1,
+            ]
+            CATransaction.commit()
         }
 
         private func makeDivider() -> UIView {
@@ -206,6 +327,9 @@
             switch item {
             case .esc:
                 makeTrackedKeyButton(title: "Escape", systemImage: "escape", key: .esc)
+
+            case .shift:
+                makeTrackedModifierButton(title: "Shift", systemImage: "shift", modifier: .shift)
 
             case .ctrl:
                 makeTrackedModifierButton(title: "Control", systemImage: "control", modifier: .ctrl)
@@ -237,6 +361,9 @@
             case .paste:
                 makeTrackedKeyButton(title: "Paste", systemImage: "doc.on.clipboard", key: .paste)
 
+            case .dismissKeyboard:
+                makeTrackedKeyButton(title: "Hide Keyboard", systemImage: "keyboard.chevron.compact.down", key: .dismissKeyboard)
+
             case let .custom(id, title, systemImage):
                 makeTrackedCustomButton(id: id, title: title, systemImage: systemImage)
 
@@ -256,7 +383,7 @@
             let button = makeActionButton(title: title, systemImage: systemImage) { [weak self] in
                 self?.pushLayer(items)
             }
-            keyButtons.append(button)
+            track(button)
             return button
         }
 
@@ -275,7 +402,7 @@
                 button.menu = menu
                 button.showsMenuAsPrimaryAction = true
             }
-            keyButtons.append(button)
+            track(button)
             return button
         }
 
@@ -289,7 +416,11 @@
                 systemImage: systemImage,
                 modifier: modifier
             )
-            modifierButtons.append((modifier, button))
+            if buildingPinned {
+                pinnedModifierButtons.append((modifier, button))
+            } else {
+                modifierButtons.append((modifier, button))
+            }
             return button
         }
 
@@ -299,8 +430,16 @@
             key: TerminalInputBarKey
         ) -> AccessoryButton {
             let button = makeKeyButton(title: title, systemImage: systemImage, key: key)
-            keyButtons.append(button)
+            track(button)
             return button
+        }
+
+        private func track(_ button: AccessoryButton) {
+            if buildingPinned {
+                pinnedKeyButtons.append(button)
+            } else {
+                keyButtons.append(button)
+            }
         }
 
         private func makeModifierButton(

@@ -6,6 +6,11 @@
 #if canImport(UIKit) && !targetEnvironment(macCatalyst)
     public enum TerminalInputAccessoryItem: Equatable, Sendable {
         case esc
+        /// Sticky Shift — the modifier the TUIs want on Tab (Shift+Tab
+        /// cycles modes in Claude Code and most curses forms) and Enter
+        /// (newline-without-submit where the app supports it). Applies to
+        /// the next key like Ctrl/Alt/⌘; a lone letter comes out uppercase.
+        case shift
         case ctrl
         case alt
         case command
@@ -16,6 +21,10 @@
         case arrowRight
         case symbol(String)
         case paste
+        /// Drops the software keyboard: the terminal view resigns first
+        /// responder. Sticky modifiers are left untouched — dismissing
+        /// the keyboard is not a key.
+        case dismissKeyboard
         case divider
         /// A host-defined button rendered with the same chrome as the
         /// built-in keys. If the view's `onCustomAccessoryItemMenu`
@@ -37,6 +46,7 @@
         public static let defaultItems: [TerminalInputAccessoryItem] = [
             .esc,
             .tab,
+            .shift,
             .ctrl,
             .alt,
             .command,
@@ -112,5 +122,6 @@
         case arrowRight
         case symbol(String)
         case paste
+        case dismissKeyboard
     }
 #endif

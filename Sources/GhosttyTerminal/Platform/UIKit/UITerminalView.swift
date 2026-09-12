@@ -62,6 +62,19 @@
                 }
             }
 
+            /// Keys fixed to the bar's trailing edge, outside the scrolling
+            /// run of `inputAccessoryItems`: they stay put however far the
+            /// run is scrolled and across every pushed `.layer`. Rendered
+            /// with the same chrome, separated from the run by an automatic
+            /// divider when non-empty. Empty (the default) renders nothing
+            /// and the run keeps the whole width.
+            open var pinnedInputAccessoryItems: [TerminalInputAccessoryItem] = [] {
+                didSet {
+                    terminalInputAccessory.rebuildPinnedContent()
+                    reloadInputViews()
+                }
+            }
+
             /// Dispatch seam for `.custom(id:title:systemImage:)` accessory
             /// items: invoked with the tapped item's `id`. The bar renders
             /// custom items with the built-in button chrome but attaches no

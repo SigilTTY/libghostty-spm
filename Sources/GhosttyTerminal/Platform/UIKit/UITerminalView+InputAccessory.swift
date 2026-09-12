@@ -29,6 +29,9 @@
                     inputHandler.insertText(text)
                 }
 
+            case .dismissKeyboard:
+                resignFirstResponder()
+
             case .esc:
                 let mods = stickyModifiers.consumeForNextKey()
                 sendSyntheticKey(usage: 0x29, additionalMods: mods)
@@ -223,6 +226,15 @@
                 return true
             }
 
+            // Shift alone on a letter is just its capital — type it as
+            // text so the IME/paste path stays untouched; Shift on Tab,
+            // Enter and the symbols goes through the key event below,
+            // where the encoder can produce CSI Z / the kitty forms.
+            if mods == .shift, text.count == 1, let char = text.first, char.isLetter {
+                fallback(text.uppercased())
+                return true
+            }
+
             if sendModifiedTextKey(text, modifiers: mods) {
                 return true
             }
@@ -280,7 +292,11 @@
             )
             event.mods = modifiers.union(mapping.extraModifiers).ghosttyMods
 
-            if !modifiers.contains(.super_) {
+            // Enter/Tab carry no literal: the encoder owns their bytes
+            // (Shift+Tab → CSI Z, Shift+Enter → the kitty/CSI-u form when
+            // the app asked for it), exactly as the hardware path sends
+            // them.
+            if !modifiers.contains(.super_), mapping.hasLiteral {
                 text.withCString { ptr in
                     event.text = ptr
                     _ = surface.sendKeyEvent(event)
@@ -297,9 +313,29 @@
             return ghosttyKey
         }
 
-        private func keyMapping(
+        private struct KeyMapping {
+            let key: ghostty_input_key_e
+            let extraModifiers: TerminalInputModifiers
+            /// False for keys whose bytes the encoder derives itself.
+            var hasLiteral = true
+        }
+
+        private func keyMapping(for text: String) -> KeyMapping? {
+            guard let mapped = keyMappingTuple(for: text) else { return nil }
+            return KeyMapping(key: mapped.key, extraModifiers: mapped.extraModifiers,
+                              hasLiteral: mapped.key != GHOSTTY_KEY_ENTER && mapped.key != GHOSTTY_KEY_TAB)
+        }
+
+        private func keyMappingTuple(
             for text: String
         ) -> (key: ghostty_input_key_e, extraModifiers: TerminalInputModifiers)? {
+            // UIKit's Return and Tab arrive as text; with a sticky modifier
+            // armed they are keys again.
+            switch text {
+            case "\n", "\r": return (GHOSTTY_KEY_ENTER, [])
+            case "\t": return (GHOSTTY_KEY_TAB, [])
+            default: break
+            }
             guard text.count == 1, let char = text.first else { return nil }
             switch char {
             case "a" ... "z":
