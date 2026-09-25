@@ -71,6 +71,7 @@
                     translationModifiers: translationEvent.modifierFlags
                 )
                 for text in collected {
+                    view.reportUserInput(.key(TerminalKeyInput(input, text: text)))
                     text.withCString { ptr in
                         input.text = ptr
                         surface.sendKeyEvent(input)
@@ -111,11 +112,12 @@
             }
             var input = event.buildKeyInput(action: GHOSTTY_ACTION_RELEASE)
             input.text = nil
+            view.reportUserInput(.key(TerminalKeyInput(input, text: nil)))
             surface.sendKeyEvent(input)
         }
 
         func handleFlagsChanged(with event: NSEvent) {
-            guard let surface = view?.surface else { return }
+            guard let view, let surface = view.surface else { return }
             guard inputMethodHandler?.hasMarkedText != true else { return }
 
             let mod: UInt32
@@ -156,6 +158,7 @@
 
             var input = event.buildKeyInput(action: action)
             input.text = nil
+            view.reportUserInput(.key(TerminalKeyInput(input, text: nil)))
             surface.sendKeyEvent(input)
         }
 
@@ -176,10 +179,12 @@
                   let chars = translationEvent.filteredCharacters,
                   !chars.isEmpty
             else {
+                view?.reportUserInput(.key(TerminalKeyInput(input, text: nil)))
                 surface.sendKeyEvent(input)
                 return
             }
 
+            view?.reportUserInput(.key(TerminalKeyInput(input, text: chars)))
             chars.withCString { ptr in
                 input.text = ptr
                 surface.sendKeyEvent(input)
@@ -201,6 +206,7 @@
             guard case let .data(sequence) = delivery else { return false }
             guard case let .inMemory(session) = view.configuration.backend else { return false }
 
+            view.reportUserInput(.bytes(sequence))
             session.sendInput(sequence)
             return true
         }

@@ -58,8 +58,9 @@
 
             if accumulatedTexts != nil {
                 accumulatedTexts?.append(text)
-            } else {
-                view?.surface?.sendText(text)
+            } else if let view, let surface = view.surface {
+                view.reportUserInput(.text(text))
+                surface.sendText(text)
             }
         }
 

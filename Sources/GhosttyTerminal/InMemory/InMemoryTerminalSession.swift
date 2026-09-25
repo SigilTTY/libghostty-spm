@@ -257,7 +257,11 @@ public final class InMemoryTerminalSession: @unchecked Sendable {
         )
     }
 
-    func waitForPendingOutput() {
+    /// Blocks until every write enqueued so far has been parsed into the
+    /// terminal. A host that feeds a fresh surface its backlog and must
+    /// encode input against the resulting modes (bracketed paste, cursor-key
+    /// mode) waits here first.
+    public func waitForPendingOutput() {
         surfaceAccess.waitForPendingOutput()
     }
 

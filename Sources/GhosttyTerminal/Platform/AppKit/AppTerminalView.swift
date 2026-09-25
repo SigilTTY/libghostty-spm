@@ -19,6 +19,9 @@
         var lastPointerSelectionRect: CGRect?
         var pendingSelectionMenuPoint: CGPoint?
         var onFocusChange: ((Bool) -> Void)?
+        /// Set while a paste chord's key event runs through keyDown: the
+        /// chord is reported as the paste it performs, not as a key too.
+        var suppressesUserInputReports = false
 
         open weak var delegate: (any TerminalSurfaceViewDelegate)? {
             get { core.delegate }

@@ -34,7 +34,18 @@
             }
 
             if keyIsBinding(event, on: surface) {
+                // ⌘V is reported as the paste it performs (read here, where
+                // the gesture is still known to be one), never also as a
+                // key: a host replaying keys would paste twice.
+                let isPasteChord = Self.isPlainPasteChord(event) && reportsUserInput
+                if isPasteChord,
+                   let pasted = NSPasteboard.general.string(forType: .string),
+                   !pasted.isEmpty {
+                    reportUserInput(.paste(pasted))
+                }
+                suppressesUserInputReports = isPasteChord
                 keyDown(with: event)
+                suppressesUserInputReports = false
                 return true
             }
 
@@ -130,13 +141,16 @@
                    .terminalDidRequestNonTextPaste() == true {
                 return
             }
-            if let text = pasteboard.string(forType: .string), !text.isEmpty {
+            let text = pasteboard.string(forType: .string) ?? ""
+            if !text.isEmpty {
                 TerminalDebugLog.log(
                     .input,
                     "paste binding bytes=\(text.utf8.count) lines=\(TerminalInputText.lineCount(in: text))"
                 )
             }
-            _ = surface?.performBindingAction("paste_from_clipboard")
+            if surface?.performBindingAction("paste_from_clipboard") == true, !text.isEmpty {
+                reportUserInput(.paste(text))
+            }
         }
 
         /// ⌘V with no other modifiers — the one chord treated as a paste
