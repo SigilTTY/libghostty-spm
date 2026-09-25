@@ -89,6 +89,14 @@
             /// never fires for that item). Set this BEFORE assigning
             /// `inputAccessoryItems`, or reassign the items to rebuild.
             open var onCustomAccessoryItemMenu: ((String) -> UIMenu?)?
+
+            /// Whether a direct-touch tap becomes a mouse click while the
+            /// surface's mouse is captured (a mouse-mode TUI is running).
+            /// `false` keeps the tap on the keyboard show/hide toggle even
+            /// then — for hosts that know the click cannot reach its target,
+            /// e.g. a relay in between that drops button reports. Read per
+            /// touch; plain (uncaptured) sessions ignore it.
+            open var forwardsTapsAsMouseClicks = true
         #endif
 
         open weak var delegate: (any TerminalSurfaceViewDelegate)? {

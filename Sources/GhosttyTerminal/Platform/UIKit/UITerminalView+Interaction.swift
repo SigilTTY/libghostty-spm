@@ -25,7 +25,7 @@
                 pendingKeyboardDismissOnTouchEnd = false
                 touchDidScrollDuringCurrentTouch = false
                 directTouchClickPending = false
-                if surface?.isMouseCaptured == true {
+                if forwardsTapsAsMouseClicks, surface?.isMouseCaptured == true {
                     // A mouse-mode TUI owns the tap: forward it as a click
                     // on touchesEnded instead of driving the keyboard
                     // (show/hide stays on the accessory button and the
