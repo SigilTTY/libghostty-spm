@@ -80,6 +80,19 @@
                     becomeFirstResponder()
                 }
             }
+
+            /// Whether a clean direct-touch tap sends its click before
+            /// ``toggleSoftwareKeyboard()``. True by default; false makes a
+            /// tap only a keyboard toggle, for a host whose program cannot
+            /// take a click (one that would swallow it). Pointer, trackpad
+            /// and long-press paths are unaffected.
+            open var forwardsTapsAsMouseClicks: Bool = true
+
+            /// Whether the software keyboard is up, the way a tap's toggle
+            /// judges it — the accessory bar alone counts as up.
+            public var isSoftwareKeyboardVisible: Bool {
+                softwareKeyboard.isVisible
+            }
         #endif
 
         /// Terminal-local touch selection and the native edit menu on iOS, on by default.

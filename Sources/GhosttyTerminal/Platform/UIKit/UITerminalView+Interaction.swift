@@ -103,7 +103,9 @@
                         // mouse gets its press before the resize the
                         // keyboard causes, and the shell sees the
                         // click-to-move at its prompt either way.
-                        sendTapClick(at: touch.location(in: self))
+                        if forwardsTapsAsMouseClicks {
+                            sendTapClick(at: touch.location(in: self))
+                        }
                         // Overridable: a host keyboard lock overrides
                         // `toggleSoftwareKeyboard()` to swallow the toggle;
                         // the click above still lands either way.

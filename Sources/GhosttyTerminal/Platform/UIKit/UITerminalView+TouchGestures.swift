@@ -57,7 +57,9 @@
                     } else {
                         // Report the click before the keyboard changes the grid,
                         // including while a TUI owns mouse input.
-                        sendTapClick(at: point)
+                        if forwardsTapsAsMouseClicks {
+                            sendTapClick(at: point)
+                        }
                         toggleSoftwareKeyboard()
                     }
                 }
