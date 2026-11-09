@@ -29,6 +29,15 @@
             guard window?.firstResponder === self else { return false }
             guard let surface else { return false }
 
+            // Plain ⌘V over a pasteboard the host prefers to serve goes to
+            // it before the paste binding, whose clipboard read carries
+            // text only.
+            if TerminalNonTextPaste.isPlainPasteChord(event),
+               TerminalNonTextPaste.offer(to: delegate)
+            {
+                return true
+            }
+
             if keyIsBinding(event, on: surface) {
                 keyDown(with: event)
                 return true
@@ -118,6 +127,9 @@
         }
 
         @IBAction open func paste(_: Any?) {
+            if TerminalNonTextPaste.offer(to: delegate) {
+                return
+            }
             if let text = NSPasteboard.general.string(forType: .string) {
                 TerminalDebugLog.log(
                     .input,

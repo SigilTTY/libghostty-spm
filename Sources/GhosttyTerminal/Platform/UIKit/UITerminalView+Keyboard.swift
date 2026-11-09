@@ -14,6 +14,10 @@
         /// A press the key path already delivered, telling the UITextInput
         /// echo to stay silent.
         var keyHandled = false
+        /// ⌘V presses the host took as a non-text paste; their releases are
+        /// swallowed too, so the surface never sees a release for a key it
+        /// never saw pressed.
+        var pressesTakenAsNonTextPaste: Set<UIPress> = []
         /// Copy is handled by the view; its repeat and release never reach the core.
         var touchCopyKeycodes: Set<UInt32> = []
         /// Signatures of keys already delivered this runloop turn by one of
@@ -99,6 +103,19 @@
     }
 
     extension UITerminalView {
+        /// Plain ⌘V over a pasteboard the host prefers to serve, offered to
+        /// ``TerminalSurfaceNonTextPasteDelegate`` ahead of the key path (the
+        /// binding's clipboard read cannot carry non-text data). True when
+        /// the host took it; the release is then swallowed in `pressesEnded`.
+        func claimNonTextPasteChord(_ press: UIPress) -> Bool {
+            guard let key = press.key,
+                  TerminalNonTextPaste.isPlainPasteChord(key),
+                  TerminalNonTextPaste.offer(to: delegate)
+            else { return false }
+            hardwareKeyboard.pressesTakenAsNonTextPaste.insert(press)
+            return true
+        }
+
         override open func pressesBegan(
             _ presses: Set<UIPress>,
             with event: UIPressesEvent?,
@@ -109,6 +126,7 @@
                     if !TerminalKeyRepeat.isModifier(usage: UInt16(key.keyCode.rawValue)) {
                         stopKeyRepeat()
                     }
+                    if claimNonTextPasteChord(press) { continue }
                     guard handleKeyPress(key, action: GHOSTTY_ACTION_PRESS) else { continue }
                     startKeyRepeat(for: press)
                 }
@@ -123,6 +141,7 @@
                     if !TerminalKeyRepeat.isModifier(usage: UInt16(key.keyCode.rawValue)) {
                         stopKeyRepeat()
                     }
+                    if claimNonTextPasteChord(press) { continue }
                     if shouldDeferKeyToInputMethod(key) {
                         TerminalDebugLog.log(
                             .input,
@@ -167,6 +186,7 @@
                     if press === hardwareKeyboard.keyRepeat?.press {
                         stopKeyRepeat()
                     }
+                    if hardwareKeyboard.pressesTakenAsNonTextPaste.remove(press) != nil { continue }
                     guard let key = press.key else { continue }
                     handleKeyPress(key, action: GHOSTTY_ACTION_RELEASE)
                 }
@@ -180,6 +200,7 @@
                     if hardwareKeyboard.pressesForwardedToInputMethod.remove(press) != nil {
                         forwardedToInputMethod.insert(press)
                     }
+                    if hardwareKeyboard.pressesTakenAsNonTextPaste.remove(press) != nil { continue }
                     if hardwareKeyboard.pressesLoanedToInputMethod.remove(press) != nil {
                         // The surface never saw this press (a replayed key
                         // carries its own synthetic release), so it gets no
@@ -201,6 +222,7 @@
             with event: UIPressesEvent?,
         ) {
             hardwareKeyboard.keyHandled = false
+            hardwareKeyboard.pressesTakenAsNonTextPaste.subtract(presses)
             if presses.contains(where: { $0 === hardwareKeyboard.keyRepeat?.press }) {
                 stopKeyRepeat()
             }

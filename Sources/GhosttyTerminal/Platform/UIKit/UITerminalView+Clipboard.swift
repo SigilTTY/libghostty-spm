@@ -58,6 +58,11 @@
             if inputHandler.hasMarkedText {
                 inputHandler.unmarkText()
             }
+            // Before anything is staged: a host that serves the payload
+            // itself (uploads it) has no use for a local path.
+            if TerminalNonTextPaste.offer(to: delegate) {
+                return
+            }
             if TerminalPasteboardContent.text() != nil {
                 _ = surface?.performBindingAction("paste_from_clipboard")
                 return

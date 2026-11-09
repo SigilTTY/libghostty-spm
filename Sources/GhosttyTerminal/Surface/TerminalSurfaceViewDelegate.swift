@@ -294,6 +294,25 @@ public protocol TerminalSurfaceFontSizeDelegate: TerminalSurfaceViewDelegate {
     func terminalDidChangeFontSize(_ fontSize: Float)
 }
 
+/// A user paste gesture found a pasteboard whose payload is not prompt-ready
+/// text: no text at all (an image or document copy), or file URLs whose
+/// string is mere decoration — a Finder or Files copy carries the file's
+/// *name* as its string. The host decides what to do with it; return true
+/// when it took the paste over. False keeps the library's own handling —
+/// text pastes, and on UIKit data with no path is staged to a local file
+/// whose path is pasted.
+///
+/// Wired to gestures only: the edit menu and other responder-chain pastes,
+/// the accessory bar's and the touch menu's Paste, and plain ⌘V, on both
+/// platforms. Never to the runtime's clipboard-read callback, which a
+/// remote program drives through OSC 52 — routed there, the remote could
+/// trigger whatever the host does with the pasteboard (an upload) with no
+/// user action at all.
+@MainActor
+public protocol TerminalSurfaceNonTextPasteDelegate: TerminalSurfaceViewDelegate {
+    func terminalDidRequestNonTextPaste() -> Bool
+}
+
 /// Notifies a delegate when the underlying ``TerminalSurface`` is created or
 /// torn down. Useful when a consumer needs surface-level APIs (e.g.
 /// ``TerminalSurface/paste(text:)``) reachable from outside the platform view.
