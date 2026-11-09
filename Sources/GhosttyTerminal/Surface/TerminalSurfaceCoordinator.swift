@@ -76,6 +76,15 @@ final class TerminalSurfaceCoordinator {
     /// correcting any drift introduced by ghostty within a single frame.
     var onPostRender: (() -> Void)?
 
+    /// Called right before the surface is freed, on every teardown path
+    /// (window exit, controller or configuration rebuild, deinit). Ghostty's
+    /// IOSurfaceLayer keeps the renderer pointer in its `display_cb` /
+    /// `display_ctx` ivars and never clears them, so a layer that outlives
+    /// the free — still in a layer tree, or held by an in-flight
+    /// CoreAnimation commit — sends `-display` into the freed renderer.
+    /// Platform views detach and disarm their render layers here.
+    var neutralizeRenderLayers: (() -> Void)?
+
     private var lastMetrics: TerminalViewportMetrics?
 
     /// The live surface's font size, which Ghostty cannot report; kept by
@@ -624,6 +633,9 @@ final class TerminalSurfaceCoordinator {
         bridge.scrollbar = nil
         let hadSurface = surface != nil
         surface?.setFocus(false)
+        if hadSurface {
+            neutralizeRenderLayers?()
+        }
         surface?.free()
         surface = nil
         fontSize = nil

@@ -6,6 +6,7 @@
 //
 
 #if canImport(UIKit)
+    import ObjectiveC
     import UIKit
 
     /// SwiftUI focus-bridge hooks; behavior lives in +Lifecycle.
@@ -249,6 +250,29 @@
             // frame clipped to the bounds would scale the pixels just the
             // same. The view's layer masks the overflow instead.
             return CGRect(x: 0, y: 0, width: synced.width, height: synced.height)
+        }
+
+        /// Detaches and disarms Ghostty's render layers, right before every
+        /// surface free (see the coordinator's `neutralizeRenderLayers`).
+        /// Clearing `display_cb` / `display_ctx` makes a late `-display` a
+        /// no-op; removing the layer keeps later commits from reaching it.
+        /// Without it, closing a session while output streams in — a
+        /// connection still printing status lines — crashed under
+        /// `CA::Context::commit_transaction` nearly every time. UIKit owns
+        /// the layers of the text-input and menu subviews; they stay.
+        func neutralizeGhosttyLayers() {
+            guard let sublayers = layer.sublayers else { return }
+            for sublayer in sublayers where !(sublayer.delegate is UIView) {
+                for ivarName in ["display_cb", "display_ctx"] {
+                    if let cls = object_getClass(sublayer),
+                       let ivar = class_getInstanceVariable(cls, ivarName)
+                    {
+                        object_setIvar(sublayer, ivar, nil)
+                    }
+                }
+                sublayer.delegate = nil
+                sublayer.removeFromSuperlayer()
+            }
         }
 
         func updateSublayerFrames() {

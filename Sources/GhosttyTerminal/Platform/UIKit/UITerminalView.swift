@@ -228,6 +228,9 @@
                 self?.enforceSublayerScale()
                 self?.refreshTouchSelection()
             }
+            core.neutralizeRenderLayers = { [weak self] in
+                self?.neutralizeGhosttyLayers()
+            }
 
             setupApplicationLifecycleObservers()
             syncApplicationActiveState()
