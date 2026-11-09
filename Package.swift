@@ -26,7 +26,7 @@ let package = Package(
         .library(name: "GhosttyTheme", targets: ["GhosttyTheme"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/Lakr233/DisplayLink.git", from: "3.0.1"),
+        .package(url: "https://github.com/SigilTTY/MSDisplayLink.git", from: "3.0.1"),
     ],
     targets: [
         .target(
@@ -41,7 +41,7 @@ let package = Package(
         ),
         .target(
             name: "GhosttyTerminal",
-            dependencies: ["GhosttyKit", "DisplayLink"],
+            dependencies: ["GhosttyKit", .product(name: "DisplayLink", package: "MSDisplayLink")],
             path: "Sources/GhosttyTerminal",
             resources: [
                 .copy("Resources/Ghostty"),
@@ -65,7 +65,7 @@ let package = Package(
         ),
         .binaryTarget(
             name: "libghostty",
-            url: "https://github.com/Lakr233/libghostty-spm/releases/download/upstream.042b16b6146a/GhosttyKit.xcframework.zip",
+            url: "https://github.com/SigilTTY/libghostty-spm/releases/download/storage.1.3.17/GhosttyKit.xcframework.zip",
             checksum: "1f5cd5cebcca5181ea5aaea008252a2b622ba1e94471601cf896ee125e9a5902"
         ),
         .testTarget(

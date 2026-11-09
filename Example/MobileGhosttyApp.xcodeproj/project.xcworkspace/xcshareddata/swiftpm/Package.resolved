@@ -2,9 +2,9 @@
   "originHash" : "eaaaf38db53a606bb70dbe85a263ae10220e53ae4a447847f10bb5383fd5d229",
   "pins" : [
     {
-      "identity" : "displaylink",
+      "identity" : "msdisplaylink",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Lakr233/DisplayLink.git",
+      "location" : "https://github.com/SigilTTY/MSDisplayLink.git",
       "state" : {
         "revision" : "41bea2661e04bebcb1c4f15fc0b6197850100fdd",
         "version" : "3.0.1"
