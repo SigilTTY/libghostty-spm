@@ -10,6 +10,7 @@
     /// Drop state; behavior lives in +Drop.
     struct DropState {
         var acceptsFiles = true
+        var accepts = true
     }
 
     /// Drag and drop onto the terminal, the AppKit twin of
@@ -43,6 +44,23 @@
         public var acceptsFileDrops: Bool {
             get { drop.acceptsFiles }
             set { drop.acceptsFiles = newValue }
+        }
+
+        /// Whether the view takes drops at all; true by default. False
+        /// unregisters its drag types, so a drop goes to whatever is behind
+        /// the view — a host that handles drops on a container of its own
+        /// (uploading files to a remote shell, say) sees every one of them.
+        public var acceptsDrops: Bool {
+            get { drop.accepts }
+            set {
+                guard newValue != drop.accepts else { return }
+                drop.accepts = newValue
+                if newValue {
+                    registerForDraggedTypes(Self.dropTypes)
+                } else {
+                    unregisterDraggedTypes()
+                }
+            }
         }
 
         /// What a drop of `pasteboard` delivers, decided without reading

@@ -22,6 +22,28 @@
             addInteraction(UIDropInteraction(delegate: self))
         }
 
+        /// Whether the view takes drops at all; true by default. False
+        /// removes its drop interaction, so a drop goes to whatever is behind
+        /// the view — a host that handles drops on a container of its own
+        /// (uploading files to a remote shell, say) sees every one of them.
+        public var acceptsDrops: Bool {
+            get { ownDropInteraction != nil }
+            set {
+                guard newValue != acceptsDrops else { return }
+                if newValue {
+                    setupDropInput()
+                } else if let interaction = ownDropInteraction {
+                    removeInteraction(interaction)
+                }
+            }
+        }
+
+        private var ownDropInteraction: UIDropInteraction? {
+            interactions.lazy
+                .compactMap { $0 as? UIDropInteraction }
+                .first { $0.delegate === self }
+        }
+
         public func dropInteraction(_: UIDropInteraction, canHandle session: any UIDropSession) -> Bool {
             session.items.contains { item in
                 TerminalFileStaging.fileType(among: item.itemProvider.registeredTypeIdentifiers) != nil

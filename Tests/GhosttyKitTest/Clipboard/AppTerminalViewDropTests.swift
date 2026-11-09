@@ -34,6 +34,16 @@
         }
 
         @Test
+        func `a host can turn drops off so they reach the view behind`() {
+            let view = AppTerminalView(frame: NSRect(x: 0, y: 0, width: 100, height: 100))
+            #expect(Set(view.registeredDraggedTypes) == Set(AppTerminalView.dropTypes))
+            view.acceptsDrops = false
+            #expect(view.registeredDraggedTypes.isEmpty)
+            view.acceptsDrops = true
+            #expect(Set(view.registeredDraggedTypes) == Set(AppTerminalView.dropTypes))
+        }
+
+        @Test
         func `a host can refuse files and still take text`() async {
             let harness = await GhosttySurfaceHarness.make()
             defer { harness.tearDown() }
