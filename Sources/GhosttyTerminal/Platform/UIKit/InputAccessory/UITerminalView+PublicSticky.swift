@@ -30,6 +30,7 @@
         /// Public mirror of the internal `TerminalStickyModifierState.Modifier`
         /// enum. Decoupled so the internal type stays free to evolve.
         public enum TerminalPublicStickyModifier: String, Sendable {
+            case shift
             case ctrl
             case alt
             case command
@@ -59,6 +60,7 @@
                 for modifier: TerminalPublicStickyModifier,
             ) -> TerminalPublicStickyActivation {
                 switch modifier {
+                case .shift: publicActivation(stickyModifiers.shift)
                 case .ctrl: publicActivation(stickyModifiers.ctrl)
                 case .alt: publicActivation(stickyModifiers.alt)
                 case .command: publicActivation(stickyModifiers.command)
@@ -89,6 +91,7 @@
                 for modifier: TerminalPublicStickyModifier,
             ) -> TerminalStickyModifierState.Modifier {
                 switch modifier {
+                case .shift: .shift
                 case .ctrl: .ctrl
                 case .alt: .alt
                 case .command: .command

@@ -32,6 +32,9 @@
                     _ = stickyModifiers.consumeForNextKey()
                     pasteFromPasteboard()
 
+                case .dismissKeyboard:
+                    resignFirstResponder()
+
                 case .esc:
                     let mods = stickyModifiers.consumeForNextKey()
                     sendSyntheticKey(usage: 0x29, additionalMods: mods)
@@ -139,6 +142,17 @@
                 let mods = stickyModifiers.consumeForNextKey()
                 if mods == .ctrl, let controlByte = controlByte(for: text) {
                     sendControlByte(controlByte, modifiers: mods)
+                    return true
+                }
+
+                // Shift alone on a letter is its capital, sent the way a
+                // hardware Shift+letter is (the mapping adds the Shift).
+                // Through the event, not the fallback: a committed text's
+                // fallback is the text path, which a full-screen program
+                // reads as a paste.
+                if mods == .shift, text.count == 1, let char = text.first, char.isLetter,
+                   sendModifiedTextKey(text.uppercased(), modifiers: [])
+                {
                     return true
                 }
 

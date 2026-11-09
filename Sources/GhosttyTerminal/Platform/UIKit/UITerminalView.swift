@@ -68,6 +68,18 @@
                 }
             }
 
+            /// Keys fixed to the bar's trailing edge, outside the scrolling run
+            /// of `inputAccessoryItems`: they stay put however far the run is
+            /// scrolled and across every pushed `.layer`, with an automatic
+            /// divider before them. Empty (the default) draws nothing and
+            /// leaves the run the whole width.
+            open var pinnedInputAccessoryItems: [TerminalInputAccessoryItem] = [] {
+                didSet {
+                    terminalInputAccessory.rebuildPinnedContent()
+                    reloadInputViews()
+                }
+            }
+
             /// Dispatch seam for `.custom` accessory items, called with the
             /// tapped item's `id`. The bar draws custom items but attaches no
             /// behaviour — what a tap means is the host's. Not called for an

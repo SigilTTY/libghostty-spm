@@ -9,6 +9,11 @@
 
         public enum TerminalInputAccessoryItem: Equatable, Sendable {
             case esc
+            /// Sticky Shift, the modifier TUIs want on Tab (Shift+Tab cycles
+            /// modes in Claude Code and tabs backwards in curses forms) and
+            /// Enter. Applies to the next key like Ctrl, Option and Command;
+            /// a lone letter comes out as its capital.
+            case shift
             case ctrl
             case alt
             case command
@@ -23,6 +28,10 @@
             /// or an icon. It sends exactly what `symbol` would.
             case presentedSymbol(String, presentation: TerminalInputAccessoryItemPresentation)
             case paste
+            /// Puts the software keyboard away (the view resigns first
+            /// responder). Sticky modifiers stay as they are — hiding the
+            /// keyboard is not a key.
+            case dismissKeyboard
             case divider
             /// A host-defined button drawn with the built-in keys' chrome.
             /// When the view's `onCustomAccessoryItemMenu` returns a menu for
@@ -57,6 +66,7 @@
             public var title: String? {
                 switch self {
                 case .esc: "Escape"
+                case .shift: "Shift"
                 case .ctrl: "Control"
                 case .alt: "Option"
                 case .command: "Command"
@@ -73,6 +83,7 @@
                     case nil: symbol
                     }
                 case .paste: "Paste"
+                case .dismissKeyboard: "Hide Keyboard"
                 case let .custom(_, title, _), let .layer(title, _, _): title
                 case .divider: nil
                 }
@@ -106,6 +117,7 @@
             public var systemImage: String? {
                 switch self {
                 case .esc: "escape"
+                case .shift: "shift"
                 case .ctrl: "control"
                 case .alt: "option"
                 case .command: "command"
@@ -115,6 +127,7 @@
                 case .arrowDown: "arrowtriangle.down.fill"
                 case .arrowRight: "arrowtriangle.right.fill"
                 case .paste: "doc.on.clipboard"
+                case .dismissKeyboard: "keyboard.chevron.compact.down"
                 case let .custom(_, _, systemImage), let .layer(_, systemImage, _): systemImage
                 case .symbol, .presentedSymbol, .divider: nil
                 }
@@ -123,6 +136,7 @@
             public static let defaultItems: [TerminalInputAccessoryItem] = [
                 .esc,
                 .tab,
+                .shift,
                 .ctrl,
                 .alt,
                 .command,
@@ -196,6 +210,7 @@
             case arrowRight
             case symbol(String)
             case paste
+            case dismissKeyboard
         }
     #endif
 #endif

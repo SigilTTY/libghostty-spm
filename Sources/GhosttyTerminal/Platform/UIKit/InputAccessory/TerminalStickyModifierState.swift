@@ -10,8 +10,9 @@
         @MainActor
         final class TerminalStickyModifierState {
             enum Activation { case inactive, armed, locked }
-            enum Modifier { case ctrl, alt, command }
+            enum Modifier { case shift, ctrl, alt, command }
 
+            private(set) var shift: Activation = .inactive
             private(set) var ctrl: Activation = .inactive
             private(set) var alt: Activation = .inactive
             private(set) var command: Activation = .inactive
@@ -22,6 +23,7 @@
             var onChange: (() -> Void)?
             var onBarChange: (() -> Void)?
 
+            private var lastShiftTap: Date = .distantPast
             private var lastCtrlTap: Date = .distantPast
             private var lastAltTap: Date = .distantPast
             private var lastCommandTap: Date = .distantPast
@@ -29,6 +31,9 @@
 
             func toggle(_ modifier: Modifier) {
                 switch modifier {
+                case .shift:
+                    shift = nextActivation(shift, lastTap: lastShiftTap)
+                    lastShiftTap = Date()
                 case .ctrl:
                     ctrl = nextActivation(ctrl, lastTap: lastCtrlTap)
                     lastCtrlTap = Date()
@@ -44,6 +49,9 @@
 
             func consumeForNextKey() -> TerminalInputModifiers {
                 var mods = TerminalInputModifiers()
+                if shift != .inactive {
+                    mods.insert(.shift)
+                }
                 if ctrl != .inactive {
                     mods.insert(.ctrl)
                 }
@@ -56,8 +64,11 @@
                 // Only an armed modifier changes on consume; with none armed
                 // (nothing active, or locks only) there is no transition to
                 // report to the host or the bar.
-                let hasArmed = ctrl == .armed || alt == .armed || command == .armed
+                let hasArmed = shift == .armed || ctrl == .armed || alt == .armed || command == .armed
                 guard hasArmed else { return mods }
+                if shift == .armed {
+                    shift = .inactive
+                }
                 if ctrl == .armed {
                     ctrl = .inactive
                 }
@@ -72,11 +83,12 @@
             }
 
             var hasActiveModifiers: Bool {
-                ctrl != .inactive || alt != .inactive || command != .inactive
+                shift != .inactive || ctrl != .inactive || alt != .inactive || command != .inactive
             }
 
             func reset() {
                 guard hasActiveModifiers else { return }
+                shift = .inactive
                 ctrl = .inactive
                 alt = .inactive
                 command = .inactive
