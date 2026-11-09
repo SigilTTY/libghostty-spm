@@ -79,6 +79,9 @@
                     for: TerminalHardwareKeyRouter.ghosttyKey(forUIKitUsage: usage),
                 )
                 event.mods = additionalMods.ghosttyMods
+                if let codepoint = TerminalHardwareKeyRouter.unshiftedCodepointForUIKit(usage: usage) {
+                    event.unshifted_codepoint = codepoint
+                }
                 _ = sendInputKeyEvent(event)
                 sendSyntheticRelease(for: event)
             }

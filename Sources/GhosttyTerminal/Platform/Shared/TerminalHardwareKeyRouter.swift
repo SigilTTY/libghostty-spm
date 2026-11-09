@@ -61,6 +61,23 @@ enum TerminalHardwareKeyRouter {
         return appKitKeyCode(for: ghosttyKey)
     }
 
+    /// The unshifted codepoint a real `UIKey` of this HID usage carries in
+    /// `charactersIgnoringModifiers` — Escape and Tab; nil for keys that
+    /// carry none (arrows, whose private-use scalars the hardware path
+    /// filters out). A synthetic key, which has no `UIKey` to read it from,
+    /// sends it so its event matches the hardware one: under
+    /// `modifyOtherKeys` (vim turns it on for every `xterm*` TERM) the key
+    /// is encoded as `CSI 27;mods;codepoint~`, and a keycode alone leaves
+    /// the encoder nothing to put there. Never the text: that is the
+    /// encoder's to derive for control keys (`TerminalInputText.keyEventText`).
+    static func unshiftedCodepointForUIKit(usage: UInt16) -> UInt32? {
+        switch usage {
+        case 0x29: 0x1B
+        case 0x2B: 0x09
+        default: nil
+        }
+    }
+
     private static let ghosttyKeyToAppKitCode: [UInt32: UInt16] = {
         var result: [UInt32: UInt16] = [:]
         for (code, key) in appKitMap {

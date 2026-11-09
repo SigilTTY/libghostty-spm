@@ -22,6 +22,16 @@ struct TerminalHardwareKeyRouterTests {
     }
 
     @Test
+    func `unshifted codepoint for UI kit matches what a UIKey carries`() {
+        // Escape and Tab: the codepoint the modifyOtherKeys encoding needs.
+        #expect(TerminalHardwareKeyRouter.unshiftedCodepointForUIKit(usage: 0x29) == 0x1B)
+        #expect(TerminalHardwareKeyRouter.unshiftedCodepointForUIKit(usage: 0x2B) == 0x09)
+        // Arrows carry none the hardware path keeps.
+        #expect(TerminalHardwareKeyRouter.unshiftedCodepointForUIKit(usage: 0x50) == nil)
+        #expect(TerminalHardwareKeyRouter.unshiftedCodepointForUIKit(usage: 0x52) == nil)
+    }
+
+    @Test
     func `maps app kit key codes to ghostty keys`() {
         #expect(TerminalHardwareKeyRouter.ghosttyKey(forAppKitKeyCode: 0x7B) == GHOSTTY_KEY_ARROW_LEFT)
         #expect(TerminalHardwareKeyRouter.ghosttyKey(forAppKitKeyCode: 0x75) == GHOSTTY_KEY_DELETE)
