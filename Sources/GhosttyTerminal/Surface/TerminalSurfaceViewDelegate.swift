@@ -313,6 +313,28 @@ public protocol TerminalSurfaceNonTextPasteDelegate: TerminalSurfaceViewDelegate
     func terminalDidRequestNonTextPaste() -> Bool
 }
 
+/// User input the view is delivering to its terminal — keys after
+/// input-method resolution, committed text, paste gestures — for a host that
+/// delivers the same input to other surfaces (``TerminalUserInput``).
+///
+/// Called right before the input reaches the surface, so the host sees the
+/// state it was typed against: an Escape about to end a live search arrives
+/// while that search is still live. Reported from the view's own input paths
+/// only: never for host injection (`paste(text:)`, `pasteWithProtection`,
+/// `sendKey`, `performBindingAction`, `replayUserInput`), never for bytes the
+/// core writes by itself (query replies, mouse and focus reports), and not
+/// for drops.
+///
+/// A paste is reported at the gesture (⌘V, `paste:`); the chord is not also
+/// reported as a key. What it cannot see: paste protection may still hold or
+/// refuse the paste here, and a ⌘V rebound to another action is still
+/// reported as a paste. A mouse-driven paste (middle click) is not reported.
+/// AppKit only — the UIKit view does not report.
+@MainActor
+public protocol TerminalSurfaceUserInputDelegate: TerminalSurfaceViewDelegate {
+    func terminalDidSendUserInput(_ input: TerminalUserInput)
+}
+
 /// Notifies a delegate when the underlying ``TerminalSurface`` is created or
 /// torn down. Useful when a consumer needs surface-level APIs (e.g.
 /// ``TerminalSurface/paste(text:)``) reachable from outside the platform view.

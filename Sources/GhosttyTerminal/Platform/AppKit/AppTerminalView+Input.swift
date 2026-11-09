@@ -39,7 +39,16 @@
             }
 
             if keyIsBinding(event, on: surface) {
+                // ⌘V is reported as the paste it performs (read here, where
+                // the gesture is still known to be one), never also as a key:
+                // a host replaying keys would paste twice.
+                let isPasteChord = reportsUserInput && TerminalNonTextPaste.isPlainPasteChord(event)
+                if isPasteChord, let pasted = TerminalPasteboardContent.text(), !pasted.isEmpty {
+                    reportUserInput(.paste(pasted))
+                }
+                userInputReports.suppressed = isPasteChord
                 keyDown(with: event)
+                userInputReports.suppressed = false
                 return true
             }
 
@@ -136,7 +145,12 @@
                     "paste binding bytes=\(text.utf8.count) lines=\(TerminalInputText.lineCount(in: text))",
                 )
             }
-            _ = surface?.performBindingAction("paste_from_clipboard")
+            let pasted = reportsUserInput ? TerminalPasteboardContent.text() : nil
+            if surface?.performBindingAction("paste_from_clipboard") == true,
+               let pasted, !pasted.isEmpty
+            {
+                reportUserInput(.paste(pasted))
+            }
         }
 
         @IBAction override open func selectAll(_: Any?) {
