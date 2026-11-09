@@ -24,6 +24,20 @@
             case presentedSymbol(String, presentation: TerminalInputAccessoryItemPresentation)
             case paste
             case divider
+            /// A host-defined button drawn with the built-in keys' chrome.
+            /// When the view's `onCustomAccessoryItemMenu` returns a menu for
+            /// `id`, a tap presents it; otherwise a tap calls
+            /// `onCustomAccessoryItem` with `id`. The library attaches no
+            /// behaviour and leaves sticky modifiers alone — a custom action
+            /// is not a key. A nil (or unresolvable) `systemImage` draws
+            /// `title` as text; `title` is always the accessibility label.
+            case custom(id: String, title: String, systemImage: String?)
+            /// A sub-layer of the bar: a tap swaps the bar's content for
+            /// `items`, behind an automatic Back button. Layers nest; the
+            /// stack resets whenever the host reassigns `inputAccessoryItems`.
+            /// Sticky modifiers survive the switch — an armed Ctrl applies to
+            /// the next key tapped inside the layer.
+            case layer(title: String, systemImage: String?, items: [TerminalInputAccessoryItem])
 
             /// A key that sends `text` and is drawn as `presentation`; spelled
             /// like `symbol` so a layout reads as one list.
@@ -59,6 +73,7 @@
                     case nil: symbol
                     }
                 case .paste: "Paste"
+                case let .custom(_, title, _), let .layer(title, _, _): title
                 case .divider: nil
                 }
             }
@@ -100,6 +115,7 @@
                 case .arrowDown: "arrowtriangle.down.fill"
                 case .arrowRight: "arrowtriangle.right.fill"
                 case .paste: "doc.on.clipboard"
+                case let .custom(_, _, systemImage), let .layer(_, systemImage, _): systemImage
                 case .symbol, .presentedSymbol, .divider: nil
                 }
             }
@@ -111,11 +127,30 @@
                 .alt,
                 .command,
                 .divider,
+                .layer(
+                    title: "Arrows",
+                    // The radiating-arrows glyph, not "arrowkeys": four boxed
+                    // keys read as clutter at button size.
+                    systemImage: "arrow.up.and.down.and.arrow.left.and.right",
+                    items: defaultArrowLayerItems,
+                ),
+                .layer(title: "Symbols", systemImage: "number", items: defaultSymbolLayerItems),
+                .divider,
+                .paste,
+            ]
+
+            /// The arrow keys the default bar folds behind its "Arrows" key.
+            public static let defaultArrowLayerItems: [TerminalInputAccessoryItem] = [
                 .arrowLeft,
                 .arrowUp,
                 .arrowDown,
                 .arrowRight,
-                .divider,
+            ]
+
+            /// The symbols the default bar folds behind its "Symbols" key: the
+            /// eight it once showed inline first, then the rest of the
+            /// shell-useful ASCII set, grouped by shape.
+            public static let defaultSymbolLayerItems: [TerminalInputAccessoryItem] = [
                 .symbol("|"),
                 .symbol("/"),
                 .symbol("~"),
@@ -124,7 +159,31 @@
                 .symbol("`"),
                 .symbol("'"),
                 .symbol("\""),
-                .paste,
+                .divider,
+                .symbol("!"),
+                .symbol("@"),
+                .symbol("#"),
+                .symbol("$"),
+                .symbol("%"),
+                .symbol("^"),
+                .symbol("&"),
+                .symbol("*"),
+                .divider,
+                .symbol("("),
+                .symbol(")"),
+                .symbol("["),
+                .symbol("]"),
+                .symbol("{"),
+                .symbol("}"),
+                .symbol("<"),
+                .symbol(">"),
+                .divider,
+                .symbol(";"),
+                .symbol(":"),
+                .symbol("="),
+                .symbol("+"),
+                .symbol("\\"),
+                .symbol("?"),
             ]
         }
 

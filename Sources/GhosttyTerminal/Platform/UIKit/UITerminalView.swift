@@ -68,6 +68,18 @@
                 }
             }
 
+            /// Dispatch seam for `.custom` accessory items, called with the
+            /// tapped item's `id`. The bar draws custom items but attaches no
+            /// behaviour — what a tap means is the host's. Not called for an
+            /// item `onCustomAccessoryItemMenu` gave a menu.
+            open var onCustomAccessoryItem: ((String) -> Void)?
+
+            /// Menu seam for `.custom` items, asked per item whenever the bar
+            /// is built: a non-nil menu becomes the button's primary action
+            /// (a tap presents it). Set it before assigning
+            /// `inputAccessoryItems`, or reassign them to rebuild.
+            open var onCustomAccessoryItemMenu: ((String) -> UIMenu?)?
+
             /// Toggles the software keyboard the way a clean tap does: the
             /// touch path calls this after the tap's click has been sent.
             /// Declared in the class body so a host's `makePlatformView`

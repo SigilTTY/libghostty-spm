@@ -76,7 +76,31 @@
                 }
             }
 
+            /// Host-driven rebuild (`inputAccessoryItems` didSet): a pushed
+            /// layer is stale against the new items, so the stack resets.
             func rebuildContent() {
+                pushedLayers.removeAll()
+                rebuildEffectiveContent()
+            }
+
+            // MARK: - Layers
+
+            /// Sub-layers pushed by `.layer` items; the bar shows the top of
+            /// the stack, or the host's items at the root.
+            private var pushedLayers: [[TerminalInputAccessoryItem]] = []
+
+            private func pushLayer(_ items: [TerminalInputAccessoryItem]) {
+                pushedLayers.append(items)
+                rebuildEffectiveContent()
+            }
+
+            private func popLayer() {
+                guard !pushedLayers.isEmpty else { return }
+                pushedLayers.removeLast()
+                rebuildEffectiveContent()
+            }
+
+            private func rebuildEffectiveContent() {
                 for view in stackView.arrangedSubviews {
                     stackView.removeArrangedSubview(view)
                     view.removeFromSuperview()
@@ -84,9 +108,28 @@
                 keyButtons.removeAll()
                 modifierButtons.removeAll()
 
-                let items = terminalView?.inputAccessoryItems ?? TerminalInputAccessoryItem.defaultItems
-                addArrangedViews(items.map(makeView(for:)))
+                var views: [UIView] = []
+                if !pushedLayers.isEmpty {
+                    views.append(makeTrackedBackButton())
+                    views.append(makeDivider())
+                }
+                let items = pushedLayers.last
+                    ?? terminalView?.inputAccessoryItems
+                    ?? TerminalInputAccessoryItem.defaultItems
+                views.append(contentsOf: items.map(makeView(for:)))
+                addArrangedViews(views)
                 refreshContent()
+                // Each layer reads from its leading edge, wherever the one
+                // before it was scrolled to.
+                scrollView.contentOffset = .zero
+            }
+
+            private func makeTrackedBackButton() -> AccessoryButton {
+                let button = makeActionButton(title: "Back", systemImage: "chevron.backward") { [weak self] in
+                    self?.popLayer()
+                }
+                keyButtons.append(button)
+                return button
             }
 
             private func setupViews() {
@@ -202,9 +245,37 @@
                 case .paste:
                     return makeTrackedKeyButton(title: title, systemImage: item.systemImage, key: .paste)
 
+                case let .custom(id, _, systemImage):
+                    return makeTrackedCustomButton(id: id, title: title, systemImage: systemImage)
+
+                case let .layer(_, systemImage, items):
+                    let button = makeActionButton(title: title, systemImage: systemImage) { [weak self] in
+                        self?.pushLayer(items)
+                    }
+                    keyButtons.append(button)
+                    return button
+
                 case .divider:
                     return makeDivider()
                 }
+            }
+
+            private func makeTrackedCustomButton(
+                id: String,
+                title: String,
+                systemImage: String?,
+            ) -> AccessoryButton {
+                let button = makeActionButton(title: title, systemImage: systemImage) { [weak terminalView] in
+                    terminalView?.onCustomAccessoryItem?(id)
+                }
+                // A host menu wins over tap dispatch: `showsMenuAsPrimaryAction`
+                // presents it on a tap and suppresses the handler above.
+                if let menu = terminalView?.onCustomAccessoryItemMenu?(id) {
+                    button.menu = menu
+                    button.showsMenuAsPrimaryAction = true
+                }
+                keyButtons.append(button)
+                return button
             }
 
             private func makeTrackedModifierButton(
@@ -251,17 +322,30 @@
                 systemImage: String? = nil,
                 key: TerminalInputBarKey,
             ) -> AccessoryButton {
-                let image: UIImage? = if case let .image(image, _) = presentation { image } else { nil }
-                // A text key widens into a capsule for a label longer than
-                // the circle holds; a glyph or image key stays round.
-                let fitsTitle = systemImage == nil && image == nil
-                let button = AccessoryButton(size: buttonSize, fitsTitle: fitsTitle) { [weak terminalView] in
+                makeActionButton(title: title, presentation: presentation, systemImage: systemImage) {
+                    [weak terminalView] in
                     terminalView?.handleInputBarKey(key)
                 }
+            }
+
+            private func makeActionButton(
+                title: String,
+                presentation: TerminalInputAccessoryItemPresentation? = nil,
+                systemImage: String? = nil,
+                handler: @escaping () -> Void,
+            ) -> AccessoryButton {
+                let image: UIImage? = if case let .image(image, _) = presentation { image } else { nil }
+                // A symbol name newer than the OS resolves to nothing; the
+                // key then draws its title as text rather than an empty circle.
+                let glyph = systemImage.flatMap { UIImage(systemName: $0) }
+                // A text key widens into a capsule for a label longer than
+                // the circle holds; a glyph or image key stays round.
+                let fitsTitle = glyph == nil && image == nil
+                let button = AccessoryButton(size: buttonSize, fitsTitle: fitsTitle, handler: handler)
                 button.accessibilityLabel = title
 
-                if let systemImage {
-                    button.setImage(UIImage(systemName: systemImage), for: .normal)
+                if let glyph {
+                    button.setImage(glyph, for: .normal)
                 } else if let image, image.isSymbolImage {
                     // An SF Symbol is a glyph, drawn like the built-in keys';
                     // filled, it swelled into a blot of the tint color.
